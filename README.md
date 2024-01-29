@@ -60,4 +60,23 @@ pip freeze > ./env_setup/requirements2.txt
 deactivate
 ```
 
+## 3) Run code
 
+Now, with the environment setup, we can run the needed code from the base directory. We recommend using the "fire" library to avoid argparsers and maintain cleaner code.
+
+```bash
+###############################
+# Getting help with fire
+###############################
+python 01_train_model.py main --help
+
+###############################
+# Executing with default arguments
+###############################
+python 01_train_model.py main
+
+###############################
+# Executing and changing an argument
+###############################
+python 01_train_model.py main --seed=7
+```
