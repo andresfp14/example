@@ -79,4 +79,10 @@ python 01_train_model.py main
 # Executing and changing an argument
 ###############################
 python 01_train_model.py main --seed=7
+
+###############################
+# Executing the function main for multiple arguments
+# See helper function pex (parallel execution).
+###############################
+python 01_train_model.py pex main --seed=[0,1,2,3,4,5,6,7,8,9] --num_processes=4
 ```

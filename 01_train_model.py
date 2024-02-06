@@ -9,6 +9,7 @@ import fire
 
 from modules.models.simple_net import Net
 from modules.training.training import train, test
+from modules.utils.parallelize import pex
 
 
 def main(batch_size: int = 64, test_batch_size: int = 1000, epochs: int = 14, lr: float = 1.0, 
