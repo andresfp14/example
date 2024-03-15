@@ -1,7 +1,7 @@
 ###############################################################################
 # Nvidia already has a docker image where they installed all their drivers 
 ###############################################################################
-FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04
 ENV CUDA_VISIBLE_DEVICES=0
 
 ###############################################################################
