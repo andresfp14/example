@@ -2,6 +2,7 @@
 # Nvidia already has a docker image where they installed all their drivers 
 ###############################################################################
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+ENV CUDA_VISIBLE_DEVICES=0
 
 ###############################################################################
 # Small fix for the internal time of the container. Logging has issues otherwise
