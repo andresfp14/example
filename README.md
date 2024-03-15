@@ -7,20 +7,20 @@ The docker image that we are going to use is the one on 'env_setup/Dockerfile'.
 
 ```bash
 # build image
-docker build -t andresfp14/xaicu118 ./env_setup
+docker build -t andresfp14/xaicu122 ./env_setup
 
 # push image to docker repo (if you want to make it available in general)
-docker push andresfp14/xaicu118
+docker push andresfp14/xaicu122
 
 # Examples of how to launch it in windows
-docker run -it --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118
-docker run -d --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
+docker run -it --rm --name xaicu122 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu122
+docker run -d --rm --name xaicu122 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu122 bash
 
 # Examples of how to launch it in linux
-docker run -it --rm --name xaicu118 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
-docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
-docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118
-docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu118
+docker run -it --rm --name xaicu122 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu122 bash
+docker run -d --rm --name xaicu122 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu122 bash
+docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu122
+docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu122
 
 ```
 
