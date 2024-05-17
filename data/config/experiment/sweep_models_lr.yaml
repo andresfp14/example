@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - override /training: default
+
+hydra: 
+  mode: MULTIRUN
+  sweeper:
+    params:
+      model: net2,net5
+      training.lr: 1.0,0.1,0.001
+      training.epochs: 1

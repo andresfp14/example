@@ -91,6 +91,15 @@ python 01_train_model.py +config=alternative.yaml
 python 01_train_model.py --multirun model.num_layers=1,2,3
 
 ###############################
+# Executing multiple runs with launchers
+###############################
+python 01_train_model.py --multirun model.num_layers=1,2,3 +launcher=joblib
+
+# or 
+
+python 01_train_model.py --multirun model.num_layers=1,2,3 +launcher=slurm
+
+###############################
 # Using Hydra and Slurm for cluster job submissions
 ###############################
 python 01_train_model.py --multirun model.num_layers=1,2,3 hydra/launcher=slurm \

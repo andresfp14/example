@@ -1,0 +1,2 @@
+# Model configuration for SimpleNet
+num_layers: 5  # Number of layers in the neural network (int)
