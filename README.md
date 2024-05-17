@@ -7,20 +7,20 @@ The docker image that we are going to use is the one on 'env_setup/Dockerfile'.
 
 ```bash
 # build image
-docker build -t andresfp14/xaicu122 ./env_setup
+docker build -t andresfp14/xaicu118 ./env_setup
 
 # push image to docker repo (if you want to make it available in general)
-docker push andresfp14/xaicu122
+docker push andresfp14/xaicu118
 
 # Examples of how to launch it in windows
-docker run -it --rm --name xaicu122 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu122
-docker run -d --rm --name xaicu122 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu122 bash
+docker run -it --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118
+docker run -d --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
 
 # Examples of how to launch it in linux
-docker run -it --rm --name xaicu122 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu122 bash
-docker run -d --rm --name xaicu122 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu122 bash
-docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu122
-docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu122
+docker run -it --rm --name xaicu118 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
+docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
+docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118
+docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu118
 
 ```
 
@@ -34,9 +34,9 @@ In general, this is defined in the file 'env/requirements.txt'.
 # with conda
 ###############################
 # create environment
-conda create --prefix ./venv python=3.11
+conda create --prefix ./.venv python=3.11
 # activate environment
-conda activate ./venv
+conda activate ./.venv
 # install requirements
 pip install -r ./env_setup/requirements.txt
 # export environment (if you want to update it)
@@ -66,23 +66,37 @@ Now, with the environment setup, we can run the needed code from the base direct
 
 ```bash
 ###############################
-# Getting help with fire
+# Getting help
 ###############################
-python 01_train_model.py main --help
+python 01_train_model.py --help
 
 ###############################
 # Executing with default arguments
 ###############################
-python 01_train_model.py main
+python 01_train_model.py
 
 ###############################
 # Executing and changing an argument
 ###############################
-python 01_train_model.py main --seed=7
+python 01_train_model.py training.seed=7
 
 ###############################
-# Executing the function main for multiple arguments
-# See helper function pex (parallel execution).
+# Executing with an alternative configuration file
 ###############################
-python 01_train_model.py pex main --seed=[0,1,2,3,4,5,6,7,8,9] --num_processes=4
+python 01_train_model.py +config=alternative.yaml
+
+###############################
+# Executing multiple runs with different model sizes using Hydra's multirun feature
+###############################
+python 01_train_model.py --multirun model.num_layers=1,2,3
+
+###############################
+# Using Hydra and Slurm for cluster job submissions
+###############################
+python 01_train_model.py --multirun model.num_layers=1,2,3 hydra/launcher=slurm \
+    hydra.launcher.partition=my_partition \
+    hydra.launcher.comment='MNIST training runs' \
+    hydra.launcher.nodes=1 \
+    hydra.launcher.tasks_per_node=1 \
+    hydra.launcher.mem_per_cpu=4G
 ```
