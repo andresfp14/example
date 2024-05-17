@@ -17,10 +17,9 @@ docker run -it --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%
 docker run -d --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
 
 # Examples of how to launch it in linux
-docker run -it --rm --name xaicu118 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
-docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
-docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118
-docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu118
+docker run -itd --rm --name xaicu118 --shm-size 5G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
+docker run -idt --rm --name xai_1 --shm-size 5G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118
+docker run -idt --rm --name xai_2 --shm-size 5G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu118
 
 ```
 
@@ -48,16 +47,20 @@ conda deactivate
 # with virtualenv
 ###############################
 # creates a virtualenv
-python -m venv envname
+python -m venv .venv
 # activates the virtualenv
-source envname/bin/activate
-. envname/bin/activate
+source .venv/bin/activate
+. .venv/bin/activate
 # install requirements
 pip install -r ./env_setup/requirements.txt
 # export environment (if you want to update it)
 pip freeze > ./env_setup/requirements2.txt
 # deactivate virtual environment
 deactivate
+
+
+# if you are using the HPC, consider:
+module load Python/3.10.4
 ```
 
 ## 3) Run code
@@ -78,34 +81,28 @@ python 01_train_model.py
 ###############################
 # Executing and changing an argument
 ###############################
-python 01_train_model.py training.seed=7
-
-###############################
-# Executing with an alternative configuration file
-###############################
-python 01_train_model.py +config=alternative.yaml
+python 01_train_model.py training.epochs=2 training.seed=7
 
 ###############################
 # Executing multiple runs with different model sizes using Hydra's multirun feature
 ###############################
-python 01_train_model.py --multirun model.num_layers=1,2,3
+python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3
 
 ###############################
 # Executing multiple runs with launchers
 ###############################
-python 01_train_model.py --multirun model.num_layers=1,2,3 +launcher=joblib
+python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=joblib
 
 # or 
 
-python 01_train_model.py --multirun model.num_layers=1,2,3 +launcher=slurm
+python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=slurm
 
-###############################
-# Using Hydra and Slurm for cluster job submissions
-###############################
-python 01_train_model.py --multirun model.num_layers=1,2,3 hydra/launcher=slurm \
-    hydra.launcher.partition=my_partition \
-    hydra.launcher.comment='MNIST training runs' \
-    hydra.launcher.nodes=1 \
-    hydra.launcher.tasks_per_node=1 \
-    hydra.launcher.mem_per_cpu=4G
+or
+
+python 01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
+
+# or 
+
+python 01_train_model.py --multirun +experiment=sweep_models_lr +launcher=slurm
+
 ```

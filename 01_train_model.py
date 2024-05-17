@@ -29,7 +29,7 @@ def main(cfg: DictConfig) -> None:
                 lr: 1.0  # Default: 1.0, learning rate.
                 gamma: 0.7  # Default: 0.7, learning rate step gamma.
                 no_cuda: False  # Default: False, flag to disable CUDA training.
-                no_mps: False  # Default: False, flag to disable macOS GPU training.
+                no_mps: False  # Default: False, flag to disable mps training.
                 dry_run: False  # Default: False, flag for a quick single pass.
                 seed: 1  # Default: 1, random seed for reproducibility.
                 log_interval: 10  # Default: 10, interval for logging training status.
