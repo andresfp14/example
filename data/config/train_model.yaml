@@ -1,7 +1,10 @@
 defaults:
   - _self_
-  - model: default
-  - training: default
+  - model: net2
+  - training: short
+  - dataset: mnist
+  - transforms: default
+  - loader: default
 
 hydra:
   run:

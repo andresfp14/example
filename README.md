@@ -62,17 +62,17 @@ module load Python/3.10.4
 
 ```bash
 # Display help message with all available options and arguments
-python 01_train_model.py --help
+python runs/01_train_model.py --help
 
 # Execute the script with default configuration settings
-python 01_train_model.py
+python runs/01_train_model.py
 ```
 
 ### Manual run
 
 ```bash
 # Execute the script with specific arguments, changing the number of epochs to 2 and the seed to 7
-python 01_train_model.py training.epochs=2 training.seed=7
+python runs/01_train_model.py training.epochs=2 training.seed=7
 ```
 
 ### Sweep with Hydra
@@ -80,10 +80,10 @@ python 01_train_model.py training.epochs=2 training.seed=7
 ```bash
 # Execute multiple runs with different model sizes using Hydra's multirun feature
 # This command will run the script for each combination of the specified values
-python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3
+python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3
 
 # Execute multiple runs as defined in a configuration file
-python 01_train_model.py +experiment=sweep_models_lr
+python runs/01_train_model.py +experiment=sweep_models_lr
 ```
 
 ### Launchers
@@ -91,13 +91,13 @@ python 01_train_model.py +experiment=sweep_models_lr
 ```bash
 # Execute multiple runs with Hydra's joblib launcher
 # This will run the script for each combination of the specified values using joblib for parallel execution
-python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=joblib
+python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=joblib
 
 # Or use Hydra's slurm launcher for running on a Slurm-based cluster
-python 01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=slurm
+python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=slurm
 
 # Or use Slurm with GPU support, running the script with multiple seed values
-python 01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
+python runs/01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
 ```
 
 ## Run Code with Docker (GPU Server)

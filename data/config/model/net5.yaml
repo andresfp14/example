@@ -1,2 +1,6 @@
 # Model configuration for SimpleNet
-num_layers: 5  # Number of layers in the neural network (int)
+name: net5 # name of the model configuration
+object:
+  _target_: modules.models.simple_net.Net
+  num_layers: 5
+  latent_dim: 128

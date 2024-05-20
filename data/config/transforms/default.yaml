@@ -1,0 +1,16 @@
+name: default
+train:
+  _target_: torchvision.transforms.Compose
+  transforms:
+    - _target_: torchvision.transforms.ToTensor
+    - _target_: torchvision.transforms.Normalize
+      mean: [0.1307]
+      std: [0.3081]
+
+test:
+  _target_: torchvision.transforms.Compose
+  transforms:
+    - _target_: torchvision.transforms.ToTensor
+    - _target_: torchvision.transforms.Normalize
+      mean: [0.1307]
+      std: [0.3081]

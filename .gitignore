@@ -12,6 +12,9 @@ rclone.exe
 tmp/*
 # don't commit the virtual environment
 venv
+.venv
+# don't commit vscode configs
+.vscode
 
 ###############################################################################
 # The part below was generated automatically

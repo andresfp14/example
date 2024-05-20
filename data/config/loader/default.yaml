@@ -1,0 +1,14 @@
+name: default
+train:
+  _target_: torch.utils.data.DataLoader
+  batch_size: 64
+  shuffle: True
+  num_workers: 2
+  pin_memory: True
+
+test:
+  _target_: torch.utils.data.DataLoader
+  batch_size: 1000
+  shuffle: False
+  num_workers: 2
+  pin_memory: True
