@@ -169,4 +169,11 @@ rclone copy ./data remote:bucket/path
 rclone copy remote:bucket/path ./data
 ```
 
+#### Sync Data to Remote Storage
+
+```bash
+# sync from local to remote
+rclone sync ./data/datasets merkur:axai/data/datasets -P --transfers=8
+```
+
 This setup ensures that you can efficiently manage your project environment, run your code in different scenarios, and handle data transfers seamlessly. For more details, refer to the [repository](https://github.com/andresfp14/example).
