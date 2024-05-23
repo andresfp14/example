@@ -80,7 +80,7 @@ python runs/01_train_model.py training.epochs=2 training.seed=7
 ```bash
 # Execute multiple runs with different model sizes using Hydra's multirun feature
 # This command will run the script for each combination of the specified values
-python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3
+python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3
 
 # Execute multiple runs as defined in a configuration file
 python runs/01_train_model.py +experiment=sweep_models_lr
@@ -91,10 +91,10 @@ python runs/01_train_model.py +experiment=sweep_models_lr
 ```bash
 # Execute multiple runs with Hydra's joblib launcher
 # This will run the script for each combination of the specified values using joblib for parallel execution
-python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=joblib
+python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3 +launcher=joblib
 
 # Or use Hydra's slurm launcher for running on a Slurm-based cluster
-python runs/01_train_model.py --multirun training.epochs=2 model.num_layers=1,2,3 +launcher=slurm
+python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3 +launcher=slurm
 
 # Or use Slurm with GPU support, running the script with multiple seed values
 python runs/01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
