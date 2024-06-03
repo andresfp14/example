@@ -1,4 +1,4 @@
-name: default
+name: basic
 train:
   _target_: torch.utils.data.DataLoader
   batch_size: 64

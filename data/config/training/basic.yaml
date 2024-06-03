@@ -1,0 +1,39 @@
+# Training configuration for the model model
+name: basic # name of the training configuration
+use_cuda: True  # Default: True, flag to enable CUDA training.
+use_mps: True  # Default: True, flag to enable macOS GPU training.
+dry_run: false        # Perform a dry run (do not update weights) (bool)
+seed: 1               # Seed for random number generation (int)
+save_model: true     # Whether to save the model to disk (bool)
+loss: 
+  _target_: torch.nn.NLLLoss
+optimizer:
+  _target_: torch.optim.SGD
+  lr: 0.1
+  momentum: 0.9
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  mode: 'min'
+  factor: 0.1
+  patience: 10
+scheduler_monitor: train_loss_epoch
+min_epochs: 50
+max_epochs: 300
+early_stopping_config:
+  monitor: valid_acc_epoch
+  min_delta: 0.001
+  patience: 20
+  verbose: False
+  mode: max
+gradient_clip_val: 1
+metrics: ['acc', 'f1']
+gradient_accumulation_steps: 1
+loggers:
+  tensorboard:
+    _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
+    save_dir: ${path.base_path_models}/${path.results}
+    name: tb
+  csv:
+    _target_: lightning.pytorch.loggers.csv_logs.CSVLogger
+    save_dir: ${path.base_path_models}/${path.results}
+    name: csv

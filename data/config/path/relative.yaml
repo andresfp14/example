@@ -1,0 +1,5 @@
+# path configuration
+name: relative 
+base_path_datasets: ./data/datasets
+base_path_models: ./data/models
+base_path: ./data

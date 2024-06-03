@@ -18,8 +18,8 @@ Welcome to the example repository! This guide will help you understand the struc
 ### Using Conda
 
 ```bash
-# Create a new conda environment with Python 3.11 and place it in the ./.venv directory
-conda create --prefix ./.venv python=3.11
+# Create a new conda environment with Python 3.10.4 and place it in the ./.venv directory
+conda create --prefix ./.venv python=3.10.4
 
 # Activate the newly created conda environment
 conda activate ./.venv
@@ -37,6 +37,9 @@ conda deactivate
 ### Using Virtualenv
 
 ```bash
+# If you are using a high-performance computing cluster (HPC), consider loading a specific Python module from the beginning
+module load Python/3.10.4
+
 # Create a new virtual environment named .venv
 python -m venv .venv
 
@@ -51,9 +54,6 @@ pip freeze > ./env_setup/requirements2.txt
 
 # Deactivate the virtual environment
 deactivate
-
-# If you are using a high-performance computing cluster (HPC), consider loading a specific Python module from the beginning
-module load Python/3.10.4
 ```
 
 ## Running Code Locally

@@ -5,12 +5,11 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from hydra.utils import instantiate
 import torch
 import json
 import time
 
-from modules.training.training import train, test
+from modules.training.training import train_model
 from modules.utils.seeds import seed_everything
 
 # Registering the config path with Hydra
@@ -89,7 +88,7 @@ def main(cfg: DictConfig) -> None:
     ##############################
 
     # Create a directory for saving models and results
-    model_save_dir = Path(cfg.training.base_model_dir) / f"{cfg.dataset.name}_{cfg.model.name}_{cfg.training.name}_{cfg.training.seed}"
+    model_save_dir = Path(cfg.path.base_path_models) / cfg.path.results
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Determine if CUDA or MPS should be used based on configuration and availability
@@ -107,35 +106,26 @@ def main(cfg: DictConfig) -> None:
     ##############################
 
     # Instantiate transforms for training and testing
-    train_transform = instantiate(cfg.transforms.train)
-    test_transform = instantiate(cfg.transforms.test)
+    train_transform = hydra.utils.instantiate(cfg.transforms.train)
+    test_transform = hydra.utils.instantiate(cfg.transforms.test)
 
     # Instantiate datasets with transforms
-    train_dataset = instantiate(cfg.dataset.train, transform=train_transform)
-    test_dataset = instantiate(cfg.dataset.test, transform=test_transform)
+    train_dataset = hydra.utils.instantiate(cfg.dataset.train, transform=train_transform)
+    test_dataset = hydra.utils.instantiate(cfg.dataset.test, transform=test_transform)
 
     # Instantiate data loaders
-    train_loader = instantiate(cfg.loader.train, dataset=train_dataset)
-    test_loader = instantiate(cfg.loader.test, dataset=test_dataset)
+    train_loader = hydra.utils.instantiate(cfg.loader.train, dataset=train_dataset)
+    test_loader = hydra.utils.instantiate(cfg.loader.test, dataset=test_dataset)
 
     # Instantiate model
-    model = instantiate(cfg.model.object).to(device)
-    
-    # Instantiate optimizer
-    optimizer = instantiate(cfg.training.optimizer, params=model.parameters())
-    
-    # Instantiate scheduler
-    scheduler = instantiate(cfg.training.scheduler, optimizer=optimizer)
+    model = hydra.utils.instantiate(cfg.model.object).to(device)
 
     ##############################
     # Actual Task: Training Loop
     ##############################
 
-    # Training loop
-    for epoch in range(1, cfg.training.epochs + 1):
-        train(model, device, train_loader, optimizer, epoch, cfg.training.log_interval, cfg.training.dry_run)
-        test(model, device, test_loader)
-        scheduler.step()
+    # Training loop    
+    train_model(model, train_loader, test_loader, cfg.training, device)
 
     ##############################
     # Saving Results

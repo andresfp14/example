@@ -1,14 +1,14 @@
 name: mnist
 train:
   _target_: torchvision.datasets.MNIST
-  root: './data/datasets'
+  root: '${path.base_path_datasets}'
   train: True
   download: True
   transform: null
 
 test:
   _target_: torchvision.datasets.MNIST
-  root: './data/datasets'
+  root: '${path.base_path_datasets}'
   train: False
   download: True
   transform: null

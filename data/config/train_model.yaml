@@ -1,10 +1,14 @@
 defaults:
   - _self_
+  - path: relative
   - model: net2
-  - training: short
+  - training: basic
   - dataset: mnist
-  - transforms: default
-  - loader: default
+  - transforms: basic
+  - loader: basic
+
+path:
+  results: ${dataset.name}_${model.name}_${training.name}_${training.seed}
 
 hydra:
   run:
