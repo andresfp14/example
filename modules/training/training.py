@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from modules.utils import MetricAggregator, EarlyStoppingCustom
 import logging
 
-def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLoader, cfg: DictConfig, device="cpu"):
+def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLoader, cfg: DictConfig):
     """
     Trains and evaluates a neural network model.
 
@@ -27,7 +27,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
     ##############################
     # Device Setup
     ##############################
-    device = torch.device(cfg.device)
+    device = "cuda" if (cfg.device=="cuda" and torch.cuda.is_available()) else "cpu"
     model.to(device)
 
     ##############################
@@ -58,6 +58,9 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
     # Early stopping and checkpointing
     early_stopping = EarlyStoppingCustom(**cfg.early_stopping_config)
 
+    # scaler for automatic mixed precision
+    scaler = torch.cuda.amp.GradScaler()
+
     ##############################
     # Epoch Loop
     ##############################
@@ -67,25 +70,31 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
         ##############################
         model.train()
         lr = torch.tensor(optimizer.param_groups[0]['lr'])
-        for batch_idx, batch in enumerate(train_loader):
-            x, y = batch
+        for batch_idx, (x, y) in enumerate(train_loader):
             x, y = x.to(device), y.to(device)
-            out = model(x)
-            logprob = F.log_softmax(out, dim=1)
-            y_hat_prob = torch.exp(logprob)
-            loss = criterion(logprob, y)
-            loss.backward()
+            with torch.autocast(device_type=device):
+                out = model(x)
+                logprob = F.log_softmax(out, dim=1)
+                y_hat_prob = torch.exp(logprob)
+                loss = criterion(logprob, y)
+                loss = loss / cfg.gradient_accumulation_steps
+
+            # Accumulates scaled gradients.
+            scaler.scale(loss).backward()
 
             # Gradient accumulation
             if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 optimizer.zero_grad()
 
             # Update metrics
-            metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="train")
+            with torch.autocast(device_type=device):
+                metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="train")
 
         # Compute and log metrics
-        train_results = metric_aggregator.compute(phase="train")
+        with torch.autocast(device_type=device):
+            train_results = metric_aggregator.compute(phase="train")
         logger.info(f"Epoch {epoch+1} Train: {' '.join([f'{k}:{v:.3E}'.replace('_epoch','').replace('train_','') for k,v in train_results.items() if isinstance(v,float)])}")
 
         ##############################
@@ -93,19 +102,21 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
         ##############################
         model.eval()
         with torch.no_grad():
-            for batch in valid_loader:
-                x, y = batch
+            for batch_idx, (x, y) in enumerate(valid_loader):
                 x, y = x.to(device), y.to(device)
-                out = model(x)
-                logprob = F.log_softmax(out, dim=1)
-                y_hat_prob = torch.exp(logprob)
-                val_loss = criterion(logprob, y)
+                with torch.autocast(device_type=device):
+                    out = model(x)
+                    logprob = F.log_softmax(out, dim=1)
+                    y_hat_prob = torch.exp(logprob)
+                    val_loss = criterion(logprob, y)
 
                 # Update metrics
-                metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="valid")
+                with torch.autocast(device_type=device):
+                    metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="valid")
 
         # Compute and log metrics
-        valid_results = metric_aggregator.compute(phase="valid")
+        with torch.autocast(device_type=device):
+            valid_results = metric_aggregator.compute(phase="valid")
         logger.info(f"Epoch {epoch+1} Valid: {' '.join([f'{k}:{v:.3E}'.replace('_epoch','').replace('valid_','') for k,v in valid_results.items() if isinstance(v,float)])}")
 
         ##############################

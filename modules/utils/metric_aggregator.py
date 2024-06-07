@@ -41,10 +41,10 @@ class MetricAggregator:
                 self.init_agg(phase=phase, metric=metric)
         for metric in ["acc", "cm", "f1"]:
             if metric in self.metrics:
-                self.aggregators[phase][metric](y_hat_prob.to(self.device), y.to(self.device))
+                self.aggregators[phase][metric].update(y_hat_prob.to(self.device), y.to(self.device))
         for k, v in kwargs.items():
             if k in self.aggregators[phase]:
-                self.aggregators[phase][k](v.to(self.device))
+                self.aggregators[phase][k].update(v.to(self.device))
         for logger in self.loggers:
             logger.log_metrics({f"{phase}_{k}_step":v.detach().cpu().tolist() for k,v in kwargs.items()}, step=self.step_num)
         self.step_num+=1

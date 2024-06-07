@@ -91,15 +91,11 @@ def main(cfg: DictConfig) -> None:
     model_save_dir = Path(cfg.path.base_path_models) / cfg.path.results
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine if CUDA or MPS should be used based on configuration and availability
-    use_cuda = cfg.training.use_cuda and torch.cuda.is_available()
-    use_mps = cfg.training.use_mps and torch.backends.mps.is_available()
-
     # Set the random seed for reproducibility
     seed_everything(cfg.training.seed)
 
     # Select the device for computation (CUDA, MPS, or CPU)
-    device = torch.device("cuda") if use_cuda else torch.device("mps") if use_mps else torch.device("cpu")
+    device = "cuda" if (cfg.training.device=="cuda" and torch.cuda.is_available()) else "cpu"
 
     ##############################
     # Object Instantiation
@@ -125,28 +121,15 @@ def main(cfg: DictConfig) -> None:
     ##############################
 
     # Training loop    
-    train_model(model, train_loader, test_loader, cfg.training, device)
+    train_model(model, train_loader, test_loader, cfg.training)
 
     ##############################
     # Saving Results
     ##############################
 
     # Save the model checkpoint if configured to do so
-    if cfg.training.save_model:
-        model_path = model_save_dir / f"checkpoint.pt"
-        torch.save(model.state_dict(), model_path)
-
-    # Save the result dictionary
-    results = {
-        "model_name": cfg.model.name,
-        "training_name": cfg.training.name,
-        "epochs": cfg.training.epochs,
-        "seed": cfg.training.seed,
-        "final_model_path": str(model_path),
-        "timestamp": time.time()
-    }
-    with open(model_save_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=4)
+    model_path = model_save_dir / f"checkpoint.ckpt"
+    torch.save(model.state_dict(), model_path)
 
     # Save the configuration
     config_path = model_save_dir / "config.yaml"
