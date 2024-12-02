@@ -15,4 +15,11 @@ hydra:
       "echo '# Activate venv!'", ". .venv/bin/activate", 
       "echo '# Which python:'", "which python"]
     submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+    #cpus_per_task: 4
+    #mem_per_cpu: 8000
+    #array_parallelism: 5
+    timeout_min: 60
+    #mem_per_cpu: 20000
+    #tasks_per_node: 1 #4
+    #account: p0021919
       

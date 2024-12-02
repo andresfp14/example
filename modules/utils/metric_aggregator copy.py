@@ -29,30 +29,22 @@ class MetricAggregator:
         elif metric == "f1":
             if self.num_classes is not None:
                 self.aggregators[phase][metric] = torchmetrics.F1Score(task="multiclass", num_classes=self.num_classes).to(self.device)
-        elif metric == "mse":
-            self.aggregators[phase][metric] = torchmetrics.MeanSquaredError().to(self.device)
-        elif metric == "mae":
-            self.aggregators[phase][metric] = torchmetrics.MeanAbsoluteError().to(self.device)
-        elif metric == "mape":
-            self.aggregators[phase][metric] = torchmetrics.MeanAbsolutePercentageError().to(self.device)
-        elif metric == "rmse":
-            self.aggregators[phase][metric] = torchmetrics.MeanSquaredError(squared=False).to(self.device)
         else:
             self.aggregators[phase][metric] = torchmetrics.MeanMetric().to(self.device)
 
-    def step(self, y_hat: torch.Tensor, y: torch.Tensor, phase: str = "train", **kwargs: Any) -> None:
+    def step(self, y_hat_prob: torch.Tensor, y: torch.Tensor, phase: str = "train", **kwargs: Any) -> None:
         if phase not in self.aggregators:
             self.aggregators[phase] = {}
             self.results[phase] = {}
         for metric in list(kwargs.keys()) + self.metrics:
             if metric not in self.aggregators[phase]:
                 self.init_agg(phase=phase, metric=metric)
-        for metric in ["acc", "cm", "f1", "mse", "mae", "mape", "rmse"]:
+        for metric in ["acc", "cm", "f1"]:
             if metric in self.metrics:
-                self.aggregators[phase][metric].update(y_hat.to(self.device), y.to(self.device))
+                self.aggregators[phase][metric](y_hat_prob.to(self.device), y.to(self.device))
         for k, v in kwargs.items():
             if k in self.aggregators[phase]:
-                self.aggregators[phase][k].update(v.to(self.device))
+                self.aggregators[phase][k](v.to(self.device))
         for logger in self.loggers:
             logger.log_metrics({f"{phase}_{k}_step":v.detach().cpu().tolist() for k,v in kwargs.items()}, step=self.step_num)
         self.step_num+=1

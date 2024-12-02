@@ -77,10 +77,10 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
                 logprob = F.log_softmax(out, dim=1)
                 y_hat_prob = torch.exp(logprob)
                 loss = criterion(logprob, y)
-                loss = loss / cfg.gradient_accumulation_steps
+                loss_acc = loss / cfg.gradient_accumulation_steps
 
             # Accumulates scaled gradients.
-            scaler.scale(loss).backward()
+            scaler.scale(loss_acc).backward()
 
             # Gradient accumulation
             if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):

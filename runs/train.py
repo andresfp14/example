@@ -88,7 +88,7 @@ def main(cfg: DictConfig) -> None:
     ##############################
 
     # Create a directory for saving models and results
-    model_save_dir = Path(cfg.path.base_path_models) / cfg.path.results
+    model_save_dir = Path(cfg.path.save_dir)
     model_save_dir.mkdir(parents=True, exist_ok=True)
 
     # Set the random seed for reproducibility

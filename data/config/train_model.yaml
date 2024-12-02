@@ -8,7 +8,9 @@ defaults:
   - loader: basic
 
 path:
-  results: ${dataset.name}_${model.name}_${training.name}_${training.seed}
+  results: ${dataset.name}_${model.name}_${training.name}_${training.seed}${path.exp_id}
+  save_dir: ${path.base_path_models}/${path.results}
+  exp_id: ""
 
 hydra:
   run:

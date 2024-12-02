@@ -80,10 +80,10 @@ python runs/01_train_model.py training.epochs=2 training.seed=7
 ```bash
 # Execute multiple runs with different model sizes using Hydra's multirun feature
 # This command will run the script for each combination of the specified values
-python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3
+python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7
 
 # Execute multiple runs as defined in a configuration file
-python runs/01_train_model.py +experiment=sweep_models_lr
+python runs/01_train_model.py +experiment=sweep_models_seeds
 ```
 
 ### Launchers
@@ -91,10 +91,10 @@ python runs/01_train_model.py +experiment=sweep_models_lr
 ```bash
 # Execute multiple runs with Hydra's joblib launcher
 # This will run the script for each combination of the specified values using joblib for parallel execution
-python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3 +launcher=joblib
+python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=joblib
 
 # Or use Hydra's slurm launcher for running on a Slurm-based cluster
-python runs/01_train_model.py --multirun training.epochs=2 model.object.num_layers=1,2,3 +launcher=slurm
+python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=slurm
 
 # Or use Slurm with GPU support, running the script with multiple seed values
 python runs/01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
@@ -115,16 +115,10 @@ docker push andresfp14/xaicu118
 
 # Examples of how to launch the Docker container in Windows
 
-# Run the container interactively, remove it after exiting, name it xaicu118, use all GPUs, map ports, and mount the current directory
-docker run -it --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
-
 # Run the container in detached mode, remove it after exiting, name it xaicu118, use all GPUs, map ports, and mount the current directory
 docker run -d --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
 
 # Examples of how to launch the Docker container in Linux
-
-# Run the container interactively, remove it after exiting, name it xaicu118, allocate 100G of shared memory, use all GPUs, map ports, and mount the current directory
-docker run -it --rm --name xaicu118 --shm-size 100G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
 
 # Run the container in detached mode, remove it after exiting, name it xaicu118, allocate 50G of shared memory, use all GPUs, map ports, and mount the current directory
 docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
@@ -132,8 +126,6 @@ docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 600
 # Run the container in detached and interactive mode, remove it after exiting, name it xai_1, allocate 50G of shared memory, use the first GPU device, and mount specified directories
 docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118 bash
 
-# Run the container in detached and interactive mode, remove it after exiting, name it xai_2, allocate 50G of shared memory, use the first GPU device, and mount the current directory
-docker run -idt --rm --name xai_2 --shm-size 50G --gpus '"device=0:0"' -v $(pwd):/home/example andresfp14/xaicu118 bash
 ```
 
 ## Moving Data Around with Rclone
