@@ -11,8 +11,8 @@ Welcome to the example repository! This guide will help you understand the struc
   - `Dockerfile`: Docker configuration for containerized environment.
   - `requirements.txt`: Python dependencies.
 - **runs**: Contains scripts for experimental runs, create datasets, train models, analyze them, etc.
-  - `01_train_model.py`: Main script for training the model.
-  - 
+  - `train.py`: Main script for training the model.
+
 ## Setting Up the Virtual Environment
 
 ### Using Conda
@@ -62,17 +62,17 @@ deactivate
 
 ```bash
 # Display help message with all available options and arguments
-python runs/01_train_model.py --help
+python runs/train.py --help
 
 # Execute the script with default configuration settings
-python runs/01_train_model.py
+python runs/train.py
 ```
 
 ### Manual run
 
 ```bash
 # Execute the script with specific arguments, changing the number of epochs to 2 and the seed to 7
-python runs/01_train_model.py training.epochs=2 training.seed=7
+python runs/train.py training.epochs=2 training.seed=7
 ```
 
 ### Sweep with Hydra
@@ -80,10 +80,10 @@ python runs/01_train_model.py training.epochs=2 training.seed=7
 ```bash
 # Execute multiple runs with different model sizes using Hydra's multirun feature
 # This command will run the script for each combination of the specified values
-python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7
+python runs/train.py --multirun training.epochs=2 model=net2,net5,net7
 
 # Execute multiple runs as defined in a configuration file
-python runs/01_train_model.py +experiment=sweep_models_seeds
+python runs/train.py +experiment=sweep_models_seeds
 ```
 
 ### Launchers
@@ -91,13 +91,13 @@ python runs/01_train_model.py +experiment=sweep_models_seeds
 ```bash
 # Execute multiple runs with Hydra's joblib launcher
 # This will run the script for each combination of the specified values using joblib for parallel execution
-python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=joblib
+python runs/train.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=joblib
 
 # Or use Hydra's slurm launcher for running on a Slurm-based cluster
-python runs/01_train_model.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=slurm
+python runs/train.py --multirun training.epochs=2 model=net2,net5,net7 +launcher=slurm
 
 # Or use Slurm with GPU support, running the script with multiple seed values
-python runs/01_train_model.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
+python runs/train.py --multirun training.epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
 ```
 
 ## Run Code with Docker (GPU Server)
