@@ -1,4 +1,4 @@
 # @package _global_
 defaults:
   - override /model: net2
-  - override /training: default
+  - override /training: basic

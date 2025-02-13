@@ -11,9 +11,11 @@ import time
 
 from modules.training.training import train_model
 from modules.utils.seeds import seed_everything
+from modules.utils.hydraqol import run_decorator
 
 # Registering the config path with Hydra
 @hydra.main(config_path="../data/config", config_name="train_model", version_base="1.3")
+@run_decorator
 def main(cfg: DictConfig) -> None:
     """
     Main function for training and evaluating a neural network on the MNIST dataset.
@@ -87,9 +89,8 @@ def main(cfg: DictConfig) -> None:
     # Preliminaries
     ##############################
 
-    # Create a directory for saving models and results
-    model_save_dir = Path(cfg.path.save_dir)
-    model_save_dir.mkdir(parents=True, exist_ok=True)
+    # directory for saving models and results
+    model_save_dir = Path(cfg.save_dir)
 
     # Set the random seed for reproducibility
     seed_everything(cfg.training.seed)
@@ -130,11 +131,6 @@ def main(cfg: DictConfig) -> None:
     # Save the model checkpoint if configured to do so
     model_path = model_save_dir / f"checkpoint.ckpt"
     torch.save(model.state_dict(), model_path)
-
-    # Save the configuration
-    config_path = model_save_dir / "config.yaml"
-    with open(config_path, "w") as f:
-        OmegaConf.save(config=cfg, f=f)
 
 if __name__ == '__main__':
     main()

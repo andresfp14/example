@@ -90,7 +90,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
 
             # Update metrics
             with torch.autocast(device_type=device):
-                metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="train")
+                metric_aggregator.step(y_hat=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="train")
 
         # Compute and log metrics
         with torch.autocast(device_type=device):
@@ -112,7 +112,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
 
                 # Update metrics
                 with torch.autocast(device_type=device):
-                    metric_aggregator.step(y_hat_prob=y_hat_prob, y=y, loss=val_loss, epoch=torch.tensor(epoch+1), lr=lr, phase="valid")
+                    metric_aggregator.step(y_hat=y_hat_prob, y=y, loss=val_loss, epoch=torch.tensor(epoch+1), lr=lr, phase="valid")
 
         # Compute and log metrics
         with torch.autocast(device_type=device):

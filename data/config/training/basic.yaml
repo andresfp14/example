@@ -1,6 +1,6 @@
 # Training configuration for the model model
 name: basic # name of the training configuration
-seed: 1
+seed: ${seed}
 device: cuda
 loss: 
   _target_: torch.nn.NLLLoss
@@ -27,9 +27,9 @@ gradient_accumulation_steps: 5
 loggers:
   tensorboard:
     _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
-    save_dir: ${path.base_path_models}/${path.results}
+    save_dir: ${save_dir}
     name: tb
   csv:
     _target_: lightning.pytorch.loggers.csv_logs.CSVLogger
-    save_dir: ${path.base_path_models}/${path.results}
+    save_dir: ${save_dir}
     name: csv
