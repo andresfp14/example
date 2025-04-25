@@ -6,6 +6,6 @@ hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model: net2,net5
+      model: net2,net5,net7
       seed: range(0,5)
-      training.max_epochs: 1
+      training.epochs: 3

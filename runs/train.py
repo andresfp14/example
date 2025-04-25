@@ -14,7 +14,7 @@ from modules.utils.seeds import seed_everything
 from modules.utils.hydraqol import run_decorator
 
 # Registering the config path with Hydra
-@hydra.main(config_path="../data/config", config_name="train_model", version_base="1.3")
+@hydra.main(config_path="../config", config_name="train_model", version_base="1.3")
 @run_decorator
 def main(cfg: DictConfig) -> None:
     """
@@ -93,7 +93,7 @@ def main(cfg: DictConfig) -> None:
     model_save_dir = Path(cfg.save_dir)
 
     # Set the random seed for reproducibility
-    seed_everything(cfg.training.seed)
+    seed_everything(cfg.seed)
 
     # Select the device for computation (CUDA, MPS, or CPU)
     device = "cuda" if (cfg.training.device=="cuda" and torch.cuda.is_available()) else "cpu"
@@ -102,17 +102,9 @@ def main(cfg: DictConfig) -> None:
     # Object Instantiation
     ##############################
 
-    # Instantiate transforms for training and testing
-    train_transform = hydra.utils.instantiate(cfg.transforms.train)
-    test_transform = hydra.utils.instantiate(cfg.transforms.test)
-
-    # Instantiate datasets with transforms
-    train_dataset = hydra.utils.instantiate(cfg.dataset.train, transform=train_transform)
-    test_dataset = hydra.utils.instantiate(cfg.dataset.test, transform=test_transform)
-
     # Instantiate data loaders
-    train_loader = hydra.utils.instantiate(cfg.loader.train, dataset=train_dataset)
-    test_loader = hydra.utils.instantiate(cfg.loader.test, dataset=test_dataset)
+    train_loader = hydra.utils.instantiate(cfg.data.dataloaders.train)
+    test_loader = hydra.utils.instantiate(cfg.data.dataloaders.test)
 
     # Instantiate model
     model = hydra.utils.instantiate(cfg.model.object).to(device)
@@ -122,7 +114,7 @@ def main(cfg: DictConfig) -> None:
     ##############################
 
     # Training loop    
-    train_model(model, train_loader, test_loader, cfg.training)
+    result = train_model(model, train_loader, test_loader, cfg.training)
 
     ##############################
     # Saving Results
@@ -131,6 +123,13 @@ def main(cfg: DictConfig) -> None:
     # Save the model checkpoint if configured to do so
     model_path = model_save_dir / f"checkpoint.ckpt"
     torch.save(model.state_dict(), model_path)
+
+    # save the result
+    result_path = model_save_dir / f"result.json"
+    with open(result_path, "w") as f:
+        json.dump(result, f, indent=4)
+
+    return result
 
 if __name__ == '__main__':
     main()

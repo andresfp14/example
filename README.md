@@ -1,171 +1,262 @@
-# Example Repository
 
-Welcome to the example repository! This guide will help you understand the structure of the repository, set up your environment, and run the code locally, on a high-performance cluster (HPC), or on the GPU server using docker. Additionally, it covers how to manage data with Rclone.
+# Example Repository: Workflow
 
-## Structure of the Repository
-- **modules**: Contains the core code for what you want to do. e.g. training and testing models.
-- **data**: Directory to store datasets and related files.
-  - `config/`: Configuration files for Hydra.
-    - `train_model.yaml`: (e.g) Default configuration for training.
-- **env setup**: Environment setup files.
-  - `Dockerfile`: Docker configuration for containerized environment.
-  - `requirements.txt`: Python dependencies.
-- **runs**: Contains scripts for experimental runs, create datasets, train models, analyze them, etc.
-  - `train.py`: Main script for training the model.
+This repository is a template for structuring (empirical) machine-learning projects, especially for bachelor and master thesis work. It shows how to organize experiments, manage configurations, run evaluations, and generate results in a clean and reproducible way.
 
-## Setting Up the Virtual Environment
+---
 
-### Using Conda
+## 1. What is this repository?
+
+This project shows **an example workflow for experimentation**, organized into repeatable steps. It helps you run experiments, compare results, and generate reports in a systematic way.
+
+### 1.1 Why this workflow matters
+
+- Research often needs many experiments. A clear pipeline keeps things organized.  
+- You can change settings like model type or training epochs without touching the main code.  
+- You can repeat experiments later, or share them with others, which is important for reproducibility.  
+- It shows an easy way to use high-performance-computing (HPC) resources without major code changes.  
+- Because every run is tracked, results can be explored or reproduced by other people—even months later.  
+- A good structure makes it simpler to extend your work in the future.  
+
+### 1.2 Before starting
+
+Before writing any code **define your problem precisely, both semantically and mathematically**. Clear definitions save time and make later experiments meaningful.
+
+| Step | What to write down | Why it matters |
+|------|-------------------|----------------|
+| **1. Formal problem statement** | Describe the task in plain language *and* in formal terms. <br>Example: “Given an image \(x \in \mathbb{R}^{H\times W\times 3}\), predict a label \(y \in \{0,1,\dots,K-1\}\).” | Removes ambiguity and gives direction. |
+| **2. Research question / hypothesis** | Specify exactly **what you are testing**. <br>Is it a new loss, a data-augmentation trick, or a training schedule? | Keeps experiments focused; prevents scope creep. |
+| **3. Baselines and comparisons** | List existing methods you will compare against and justify the choice. | Makes results easier to interpret and publish. |
+| **4. Evaluation metrics** | Pick metrics that match the goal (e.g., accuracy, F1, MAE, BLEU). Define how each metric is calculated. | A metric defined up front prevents “metric shopping” after the fact. |
+| **5. Success criteria** | State the test or comparisons that will show if there is an improvement. | Allows objective and significantconclusions. |
+
+Spend time on this step; a precise target makes every later script simpler to write and review.
+
+### 1.3 Workflow Overview
+
+When you turn a research question into code, follow these steps:
+
+1. **Describe one experimental run.**  
+   A run is the smallest unit that produces a set of results (for example: train ➜ evaluate ➜ save metrics).
+
+2. **List parameters you want to vary.**  
+   Think of models, hyper-parameters, datasets, data splits, or random seeds.
+
+3. **Group runs into an experiment sweep.**  
+   Running the same code many times with different parameters lets you build fair comparisons and collect statistics.
+
+4. **Automate runs with a task manager.**  
+   Here we use **Hydra**, which was built at Facebook AI Research to launch Python functions from the command line while reading YAML configuration files.  
+   - Each run gets its own config snapshot.  
+   - You can override any parameter from the shell.  
+   - Multirun mode lets you queue many jobs at once.  
+
+5. **Aggregate results and create a report.**  
+   A separate script loads all run outputs, computes summary tables/plots, and writes a PDF or notebook that can be copied straight into a thesis.
+
+---
+
+## 2. Repository Structure
 
 ```bash
-# Create a new conda environment with Python 3.10.4 and place it in the ./.venv directory
+.
+├── modules/              # Code for training, evaluation, and utilities
+│   ├── training/
+│   ├── utils/
+├── data/                 # Data, model checkpoints, and generated reports
+│   ├── datasets/
+│   ├── models/
+│   └── reports/
+├── config/               # Hydra configuration files
+│   ├── train_model.yaml
+│   ├── report.yaml
+├── runs/                 # Scripts to run experiments and workflows
+│   ├── train.py
+│   ├── report.py
+│   └── run_all_tasks.*
+└── env_setup/            # Environment setup files
+    ├── Dockerfile
+    └── requirements.txt
+```
+
+### Why this structure is important
+
+- Separates code, data, and configuration.  
+- Makes debugging and extension easier.  
+- Helps other people understand your work quickly.  
+
+---
+
+## 3. How to Run the Code
+
+### 3.1 Set up your Python environment
+
+A well-defined environment makes the code portable to different machines (local PC, lab server, or HPC cluster).  
+All required packages are listed in `./env_setup/requirements.txt`.
+
+Use either Conda or Virtualenv to create an isolated environment.
+
+**Using Conda**
+
+```bash
 conda create --prefix ./.venv python=3.10.4
-
-# Activate the newly created conda environment
 conda activate ./.venv
-
-# Install all required Python packages as listed in the requirements.txt file
 pip install -r ./env_setup/requirements.txt
-
-# Export the list of installed packages to a new requirements file
-pip freeze > ./env_setup/requirements2.txt
-
-# Deactivate the conda environment
-conda deactivate
 ```
 
-### Using Virtualenv
+**Using Virtualenv**
 
 ```bash
-# If you are using a high-performance computing cluster (HPC), consider loading a specific Python module from the beginning
-module load Python/3.10.4
-
-# Create a new virtual environment named .venv
 python -m venv .venv
-
-# Activate the newly created virtual environment
-source .venv/bin/activate
-
-# Install all required Python packages as listed in the requirements.txt file
+source .venv/bin/activate     # Linux/Mac
+.venv\Scripts\activate        # Windows
 pip install -r ./env_setup/requirements.txt
-
-# Export the list of installed packages to a new requirements file
-pip freeze > ./env_setup/requirements2.txt
-
-# Deactivate the virtual environment
-deactivate
 ```
 
-## Running Code Locally
+### Why this matters
 
-### Single Run
+- Keeps dependencies under control.  
+- Prevents conflicts with other Python projects.  
+
+### 3.2 Run experiments
+
+In this repository, a **task** is any shell call that triggers one logical step, such as a single training run or a report-generation job.
+
+Run single tasks:
 
 ```bash
-# Display help message with all available options and arguments
-python runs/train.py --help
-
-# Execute the script with default configuration settings
-python runs/train.py
+python runs/train.py      # one training run
+python runs/report.py     # aggregate previous runs and build a report
 ```
 
-### Manual run
+Run the entire pipeline:
 
 ```bash
-# Execute the script with specific arguments, changing the number of epochs to 2 and the seed to 7
-python runs/train.py training.max_epochs=2 seed=7
+# Linux/Mac
+./run_all_tasks.sh
+
+# Windows
+run_all_tasks.bat
 ```
 
-### Sweep with Hydra
+### Why this matters
+
+- Lets you test one step at a time or run everything in one command.  
+- Saves time when launching many experiments.  
+
+---
+
+## 4. Hydra Basics
+
+[Hydra](https://hydra.cc/) lets you launch Python functions from the command line and manage configuration files.
+
+- Every YAML file in `./config/` defines default settings for one part of the project (model, data, training, launcher).  
+- You can override any field directly in the shell with `key=value`.  
+- **Multirun** mode runs many configurations back-to-back and stores each result in its own folder.
+
+### 4.1 Basic Run
 
 ```bash
-# Execute multiple runs with different model sizes using Hydra's multirun feature
-# This command will run the script for each combination of the specified values
-python runs/train.py --multirun training.max_epochs=2 model=net2,net5,net7
-
-# Execute multiple runs as defined in a configuration file
-python runs/train.py +experiment=sweep_models_seed
+python runs/train.py        # uses defaults in config/
 ```
 
-### Launchers
+Pass command-line overrides:
 
 ```bash
-# Execute multiple runs with Hydra's joblib launcher
-# This will run the script for each combination of the specified values using joblib for parallel execution
-python runs/train.py --multirun training.max_epochs=2 model=net2,net5,net7 +launcher=joblib
-
-# Or use Hydra's slurm launcher for running on a Slurm-based cluster
-python runs/train.py --multirun training.max_epochs=2 model=net2,net5,net7 +launcher=slurm
-
-# Or use Slurm with GPU support, running the script with multiple seed values
-python runs/train.py --multirun training.max_epochs=2 training.seed=0,1,2,3,4 +launcher=slurmgpu
+python runs/train.py training.epochs=10 model=net5
 ```
 
-## Run Code with Docker (GPU Server)
-
-Docker allows you to execute your code on different machines with the same environment, ensuring consistent results. This is particularly useful for avoiding stochastic issues and differences between Windows and Linux.
-
-### Build and Launch Docker Container
+### 4.2 Run multiple experiments
 
 ```bash
-# Build a Docker image from the Dockerfile located in the env_setup directory
-docker build -t andresfp14/xaicu118 ./env_setup
-
-# (Optional) Push the built image to a Docker repository for public access
-docker push andresfp14/xaicu118
-
-# Examples of how to launch the Docker container in Windows
-
-# Run the container in detached mode, remove it after exiting, name it xaicu118, use all GPUs, map ports, and mount the current directory
-docker run -d --rm --name xaicu118 --gpus all -p 8888:8888 -p 6007:6007 -v %cd%:/home/example andresfp14/xaicu118 bash
-
-# Examples of how to launch the Docker container in Linux
-
-# Run the container in detached mode, remove it after exiting, name it xaicu118, allocate 50G of shared memory, use all GPUs, map ports, and mount the current directory
-docker run -d --rm --name xaicu118 --shm-size 50G --gpus all -p 8888:8888 -p 6007:6007 -v $(pwd):/home/example andresfp14/xaicu118 bash
-
-# Run the container in detached and interactive mode, remove it after exiting, name it xai_1, allocate 50G of shared memory, use the first GPU device, and mount specified directories
-docker run -idt --rm --name xai_1 --shm-size 50G --gpus '"device=0:0"' -v ~/data/datasets:/home/example/data/datasets -v $(pwd):/home/example andresfp14/xaicu118 bash
-
+python runs/train.py --multirun model=net2,net5 training.epochs=2,5
 ```
 
-## Moving Data Around with Rclone
+Hydra creates one sub-folder per setting.
 
-Rclone is a command-line program to manage files on cloud storage. It is useful for transferring large datasets to and from remote servers.
-
-### Installing Rclone
-
-Follow the instructions on the [Rclone website](https://rclone.org/install/) to install Rclone on your system.
-
-### Configuring Rclone
-
-Run the following command to configure Rclone with your cloud storage provider:
+### 4.3 Run predefined experiments
 
 ```bash
-# Configure Rclone with your cloud storage credentials and settings
+python runs/train.py +experiment=sweep_models
+```
+
+The file `./config/experiment/sweep_models.yaml` lists all overrides for this sweep.
+
+### 4.4 Use launchers for parallel runs
+
+Launchers let you run many jobs in parallel on one machine or an HPC cluster.  
+Launcher configs live in `./config/launcher/`.  
+See the Hydra launcher docs: <https://hydra.cc/docs/advanced/launcher_plugins/>.
+
+```bash
+# Local CPU parallelism with joblib
+python runs/train.py --multirun +launcher=joblib
+
+# Slurm cluster
+python runs/train.py --multirun +launcher=slurm
+
+# Slurm with GPUs
+python runs/train.py --multirun +launcher=slurmgpu
+```
+
+### Why this matters
+
+- You can explore many settings with a single command.  
+- Hydra records every config, so you know exactly what produced each result.  
+- The same code you were running in your machine, can be run in a cluster with minimal changes or coding rabbit-holes (mostly).
+
+---
+
+## 5. Tools
+
+Besides Python and Hydra, two tools are worth adding to your workflow.
+
+### 5.1 Docker
+
+Docker packages your code, environment, and dependencies into one container, so it runs the same on any operating system.
+
+```bash
+docker build -t example ./env_setup
+docker run -d --rm --name example --gpus all -v $(pwd):/home/example example bash
+```
+
+### Why this matters
+
+- Handy for sharing your work or moving it to a server.  
+- Removes “works on my machine” problems.  
+
+### 5.2 Rclone for syncing data
+
+`rclone` moves large datasets between your workstation and remote storage (e.g., S3, Google Drive).
+
+```bash
 rclone config
+rclone sync ./data/datasets remote:bucket/path -P --transfers=8
 ```
 
-### Using Rclone
+### Why this matters
 
-#### Copying Data to Remote Storage
+- Keeps local disks clean and backed up.  
+- Speeds up transfers to HPC clusters.  
 
-```bash
-# Copy data from a local directory to a remote storage bucket
-rclone copy ./data remote:bucket/path
-```
+---
 
-#### Copying Data from Remote Storage
+## 6. Using this Template
 
-```bash
-# Copy data from a remote storage bucket to a local directory
-rclone copy remote:bucket/path ./data
-```
+This project is meant to help students organize and run machine-learning experiments. What's important is the abstract idea of organizing your thoughts and your code, not this specific implementation of it.
 
-#### Sync Data to Remote Storage
+---
 
-```bash
-# sync from local to remote
-rclone sync ./data/datasets merkur:axai/data/datasets -P --transfers=8
-```
+## 7. References and Further Reading
 
-This setup ensures that you can efficiently manage your project environment, run your code in different scenarios, and handle data transfers seamlessly. For more details, refer to the [repository](https://github.com/andresfp14/example).
+- [Hydra Documentation](https://hydra.cc/)  
+- [Reproducibility in Machine Learning](https://www.nature.com/articles/s42256-019-0035-4)  
+- [Ten Simple Rules for Reproducible Research](https://doi.org/10.1371/journal.pcbi.1003285)  
+- [ML Experiment Tracking Tools](https://neptune.ai/blog/ml-experiment-tracking-tools)  
+- [Hydra Launcher Plugins](https://hydra.cc/docs/advanced/launcher_plugins/)  
+- [Docker Official Docs](https://docs.docker.com/)  
+- [Rclone Documentation](https://rclone.org/)  
+
+---
+
+The exact folder names and tools can change, but the key idea stays the same: **a clear, automated workflow makes large-scale experimentation faster, easier to debug, and easier for others to reproduce.**

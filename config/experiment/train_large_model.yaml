@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+  - override /model: net
+  - override /training: basic
+
+model:
+  object:
+    num_layers: 10
+    latent_dim: 1024

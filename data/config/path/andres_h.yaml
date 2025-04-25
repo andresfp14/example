@@ -1,5 +1,0 @@
-# path configuration
-name: andres_h 
-base_path_datasets: D:/Repos/example/data/datasets
-base_path_models: ./data/models
-base_path: ./data

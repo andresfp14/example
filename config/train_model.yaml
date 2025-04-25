@@ -1,0 +1,36 @@
+# @package _global_
+#########################################################
+# Task-specific parameters
+#########################################################
+defaults:
+  - _self_
+  - path: relative
+  - model: net2
+  - training: basic
+  - data: mnist
+
+seed: 0 # Seed for reproducibility
+suffix: "" #_${now:%Y-%m-%d_%H-%M-%S.%f}
+name: ${data.name}_${model.name}_${training.name}_${seed} #_${suffix}
+
+#########################################################
+# Hydraqol parameters (see modules/utils/hydraqol.py)
+#########################################################
+# Save directory for outputs
+save_dir: ${path.base_path_models}/${name}
+# Mode configuration (base, force, clean, check) 
+mode: base
+# Retry configuration
+retry:
+  max_retries: 3
+  delay: 5  # seconds
+
+#########################################################
+# Hydra parameters
+#########################################################
+hydra:
+  run:
+    dir: ${path.base_path}/outputs/${now:%Y-%m-%d_%H-%M-%S}_${hydra.job.name}
+  sweep:
+    dir: ${path.base_path}/outputs/${now:%Y-%m-%d_%H-%M-%S}_${hydra.job.name}
+    subdir: ${hydra.job.num}

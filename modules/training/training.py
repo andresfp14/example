@@ -6,7 +6,6 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from modules.utils import MetricAggregator, EarlyStoppingCustom
 import logging
 
 def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLoader, cfg: DictConfig):
@@ -18,7 +17,6 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
         train_loader (DataLoader): DataLoader for the training dataset.
         valid_loader (DataLoader): DataLoader for the validation dataset.
         cfg (DictConfig): Configuration object containing training parameters.
-        device (str): The device to run the training on ("cpu" or "cuda").
 
     Returns:
         None: The function does not return any value.
@@ -46,36 +44,23 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
     loggers = [hydra.utils.instantiate(logger_cfg) for logger_cfg in cfg.loggers.values()]
     logger = logging.getLogger("training")
 
-    # Initialize MetricAggregator
-    num_classes = len(train_loader.dataset.classes)
-    metric_aggregator = MetricAggregator(
-        num_classes=num_classes,
-        metrics=cfg.metrics,
-        device=device,
-        loggers=loggers
-    )
-
-    # Early stopping and checkpointing
-    early_stopping = EarlyStoppingCustom(**cfg.early_stopping_config)
-
     # scaler for automatic mixed precision
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler(device)
 
     ##############################
     # Epoch Loop
     ##############################
-    for epoch in range(cfg.max_epochs):
+    for epoch in range(cfg.epochs):
         ##############################
         # Training Loop
         ##############################
         model.train()
-        lr = torch.tensor(optimizer.param_groups[0]['lr'])
+        train_loss = 0.0
         for batch_idx, (x, y) in enumerate(train_loader):
             x, y = x.to(device), y.to(device)
             with torch.autocast(device_type=device):
                 out = model(x)
                 logprob = F.log_softmax(out, dim=1)
-                y_hat_prob = torch.exp(logprob)
                 loss = criterion(logprob, y)
                 loss_acc = loss / cfg.gradient_accumulation_steps
 
@@ -88,55 +73,43 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
                 scaler.update()
                 optimizer.zero_grad()
 
-            # Update metrics
-            with torch.autocast(device_type=device):
-                metric_aggregator.step(y_hat=y_hat_prob, y=y, loss=loss, epoch=torch.tensor(epoch+1), lr=lr, phase="train")
+            train_loss += loss.item()
 
-        # Compute and log metrics
-        with torch.autocast(device_type=device):
-            train_results = metric_aggregator.compute(phase="train")
-        logger.info(f"Epoch {epoch+1} Train: {' '.join([f'{k}:{v:.3E}'.replace('_epoch','').replace('train_','') for k,v in train_results.items() if isinstance(v,float)])}")
+        train_loss /= len(train_loader)
 
         ##############################
         # Validation Loop
         ##############################
         model.eval()
+        val_loss = 0.0
         with torch.no_grad():
             for batch_idx, (x, y) in enumerate(valid_loader):
                 x, y = x.to(device), y.to(device)
                 with torch.autocast(device_type=device):
                     out = model(x)
                     logprob = F.log_softmax(out, dim=1)
-                    y_hat_prob = torch.exp(logprob)
-                    val_loss = criterion(logprob, y)
+                    loss = criterion(logprob, y)
+                val_loss += loss.item()
 
-                # Update metrics
-                with torch.autocast(device_type=device):
-                    metric_aggregator.step(y_hat=y_hat_prob, y=y, loss=val_loss, epoch=torch.tensor(epoch+1), lr=lr, phase="valid")
+        val_loss /= len(valid_loader)
 
-        # Compute and log metrics
-        with torch.autocast(device_type=device):
-            valid_results = metric_aggregator.compute(phase="valid")
-        logger.info(f"Epoch {epoch+1} Valid: {' '.join([f'{k}:{v:.3E}'.replace('_epoch','').replace('valid_','') for k,v in valid_results.items() if isinstance(v,float)])}")
+        # Log the loss
+        for logger_ in loggers:
+            logger_.log_metrics({"train_loss": train_loss, "valid_loss": val_loss}, step=epoch)
+        logger.info(f"Epoch {epoch+1} Train Loss: {train_loss:.4f} Valid Loss: {val_loss:.4f}")
 
         ##############################
         # End of epoch
         ##############################
-        metric_aggregator.reset(phase="train")
-        metric_aggregator.reset(phase="valid")
-
         # Step the scheduler
         if isinstance(scheduler, ReduceLROnPlateau):
             scheduler.step(val_loss)
-
-        # Check early stopping
-        early_stopping(valid_results)
-        if early_stopping.should_stop and cfg.min_epochs < epoch:
-            logger.info(f"Early stopping at epoch {epoch + 1}")
-            break
 
     ##############################
     # Saving Results
     ##############################
     for logger_ in loggers:
         logger_.save()
+        logger_.finalize("success")
+    
+    return {"train_loss": train_loss, "valid_loss": val_loss}

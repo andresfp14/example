@@ -9,17 +9,21 @@ hydra:
   launcher: # https://hydra.cc/docs/plugins/submitit_launcher/
     setup: [
       "echo '# Loading python module!'", "module load Python/3.10.4 2>&1",
+      "echo '# Loading CUDA module!'", "module load CUDA/12.6.3 2>&1",
       "echo '# List of modules:'", "module list 2>&1",
       "echo '# Current working directory:'", "pwd", 
       "echo '# List of folders in pwd:'", "ls",
       "echo '# Activate venv!'", ". .venv/bin/activate", 
-      "echo '# Which python:'", "which python"]
+      "echo '# Which python:'", "which python",
+      "echo '# nvidia-smi:'", "nvidia-smi",
+      "echo '# Torch collect:'", "python -m torch.utils.collect_env",
+      "echo '# Enable error trace for hydra:'", "export HYDRA_FULL_ERROR=1"]
     submitit_folder: ${hydra.sweep.dir}/.submitit/%j
-    #cpus_per_task: 4
-    #mem_per_cpu: 8000
-    #array_parallelism: 5
-    timeout_min: 60
+    cpus_per_task: 20
+    gpus_per_node: 1 #4
     #mem_per_cpu: 20000
-    #tasks_per_node: 1 #4
+    array_parallelism: 50 #5
+    gres: "gpu:1" #"gpu:4"
+    timeout_min: 30 #300
+    tasks_per_node: 1 #4
     #account: p0021919
-      

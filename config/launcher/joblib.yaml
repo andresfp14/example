@@ -1,0 +1,16 @@
+ # @package _global_
+defaults:
+  - override /hydra/launcher: joblib
+
+hydra: 
+  callbacks:
+    log_job_return:
+      _target_: hydra.experimental.callbacks.LogJobReturnCallback
+  launcher: # https://hydra.cc/docs/plugins/joblib_launcher/
+    n_jobs: 30
+    backend: processes # use processes instead of threads
+
+    #batch_size: 10
+
+
+# tbh, joblib works great but not with pytorch dataloaders (with multiple workers) in windows.

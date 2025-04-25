@@ -1,0 +1,50 @@
+name: mnist
+
+datasets:
+  train:
+    _target_: torchvision.datasets.MNIST
+    root: '${path.base_path_datasets}'
+    train: True
+    download: True
+    transform: ${data.transforms.train}
+  test:
+    _target_: torchvision.datasets.MNIST
+    root: '${path.base_path_datasets}'
+    train: False
+    download: True
+    transform: ${data.transforms.test}
+
+transforms:
+  train:
+    _target_: torchvision.transforms.Compose
+    transforms:
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.1307]
+        std: [0.3081]
+  test:
+    _target_: torchvision.transforms.Compose
+    transforms:
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean: [0.1307]
+        std: [0.3081]
+
+dataloaders:
+  train:
+    _target_: torch.utils.data.DataLoader
+    batch_size: 256 #64
+    shuffle: True
+    num_workers: 2
+    pin_memory: True
+    dataset: ${data.datasets.train}
+    multiprocessing_context: 'spawn'
+
+  test:
+    _target_: torch.utils.data.DataLoader
+    batch_size: 1000
+    shuffle: False
+    num_workers: 2
+    pin_memory: True
+    dataset: ${data.datasets.test}
+    multiprocessing_context: 'spawn'

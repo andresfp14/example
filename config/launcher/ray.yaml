@@ -1,0 +1,15 @@
+ # @package _global_
+defaults:
+  - override /hydra/launcher: ray
+
+hydra: 
+  callbacks:
+    log_job_return:
+      _target_: hydra.experimental.callbacks.LogJobReturnCallback
+  launcher:
+    init:
+      num_gpus: 1
+    remote:
+      num_gpus: 1
+
+# ray works pretty well, but it can have issues in a single node multi-gpu setup.

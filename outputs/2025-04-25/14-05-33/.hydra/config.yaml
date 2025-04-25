@@ -1,0 +1,93 @@
+seed: 1
+suffix: ''
+name: ${data.name}_${model.name}_${training.name}_${seed}
+save_dir: ${path.base_path_models}/${name}
+mode: base
+retry:
+  max_retries: 3
+  delay: 5
+path:
+  name: relative
+  base_path_datasets: ./data/datasets
+  base_path_models: ./data/models
+  base_path: ./data
+model:
+  name: net2
+  object:
+    _target_: modules.models.simple_net.Net
+    num_layers: 2
+    latent_dim: 128
+training:
+  name: basic
+  device: cuda
+  loss:
+    _target_: torch.nn.NLLLoss
+  optimizer:
+    _target_: torch.optim.SGD
+    lr: 0.1
+    momentum: 0.9
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+    mode: min
+    factor: 0.1
+    patience: 3
+  epochs: 10
+  gradient_accumulation_steps: 5
+  loggers:
+    tensorboard:
+      _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
+      save_dir: ${save_dir}
+      name: tb
+    csv:
+      _target_: lightning.pytorch.loggers.csv_logs.CSVLogger
+      save_dir: ${save_dir}
+      name: csv
+data:
+  name: mnist
+  datasets:
+    train:
+      _target_: torchvision.datasets.MNIST
+      root: ${path.base_path_datasets}
+      train: true
+      download: true
+      transform: ${data.transforms.train}
+    test:
+      _target_: torchvision.datasets.MNIST
+      root: ${path.base_path_datasets}
+      train: false
+      download: true
+      transform: ${data.transforms.test}
+  transforms:
+    train:
+      _target_: torchvision.transforms.Compose
+      transforms:
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean:
+        - 0.1307
+        std:
+        - 0.3081
+    test:
+      _target_: torchvision.transforms.Compose
+      transforms:
+      - _target_: torchvision.transforms.ToTensor
+      - _target_: torchvision.transforms.Normalize
+        mean:
+        - 0.1307
+        std:
+        - 0.3081
+  dataloaders:
+    train:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 256
+      shuffle: true
+      num_workers: 2
+      pin_memory: true
+      dataset: ${data.datasets.train}
+    test:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 1000
+      shuffle: false
+      num_workers: 2
+      pin_memory: true
+      dataset: ${data.datasets.test}

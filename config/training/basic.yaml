@@ -1,6 +1,5 @@
 # Training configuration for the model model
 name: basic # name of the training configuration
-seed: ${seed}
 device: cuda
 loss: 
   _target_: torch.nn.NLLLoss
@@ -13,16 +12,7 @@ scheduler:
   mode: 'min'
   factor: 0.1
   patience: 3
-min_epochs: 10
-max_epochs: 300
-early_stopping_config:
-  monitor: valid_acc_epoch
-  min_delta: 0.001
-  patience: 10
-  verbose: False
-  mode: max
-gradient_clip_val: 1
-metrics: ['acc', 'f1']
+epochs: 10
 gradient_accumulation_steps: 5
 loggers:
   tensorboard:
