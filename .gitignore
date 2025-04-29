@@ -4,7 +4,7 @@
 # don't commit stuff in data, it may be too large and it's better to move it in other ways.
 # except the configs of your experiments
 data/*
-!data/config/
+outputs
 
 # Don't commit rclone in case you are using it
 rclone.exe
