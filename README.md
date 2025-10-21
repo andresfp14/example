@@ -5,56 +5,34 @@ This repository is a template for structuring (empirical) machine-learning proje
 
 ---
 
-## 1. What is this repository?
+## 1. Why plan experiments up front?
 
-This project shows **an example workflow for experimentation**, organized into repeatable steps. It helps you run experiments, compare results, and generate reports in a systematic way.
+Planning experiments at the start adds minimal overhead, clarifies objectives, and accelerates scalable, reproducible research.
 
-### 1.1 Why this workflow matters
+### 1.1 Key questions to answer
 
-- Research often needs many experiments. A clear pipeline keeps things organized.  
-- You can change settings like model type or training epochs without touching the main code.  
-- You can repeat experiments later, or share them with others, which is important for reproducibility.  
-- It shows an easy way to use high-performance-computing (HPC) resources without major code changes.  
-- Because every run is tracked, results can be explored or reproduced by other people—even months later.  
-- A good structure makes it simpler to extend your work in the future.  
+TBH, we recommend to first have a clear problem definition of what you are trying to do, think first, code second. Some things you might want to take into account:
 
-### 1.2 Before starting
+- Entities & functions: What models, datasets, vector spaces, and mappings are involved on your problem?  
+- Goals & metrics: What do you want to achieve, and how will performance be measured?  
+- Parameters to vary: Which hyperparameters, models, processes, or data splits will change?  
+- Sanity checks: How will you validate results and avoid errors?  
+- Infrastructure & results: Where will runs execute, and how will outputs be stored and aggregated?  
 
-Before writing any code **define your problem precisely, both semantically and mathematically**. Clear definitions save time and make later experiments meaningful.
+Answering these upfront defines a clear, repeatable roadmap for any experiment.
 
-| Step | What to write down | Why it matters |
-|------|-------------------|----------------|
-| **1. Formal problem statement** | Describe the task in plain language *and* in formal terms. <br>Example: “Given an image \(x \in \mathbb{R}^{H\times W\times 3}\), predict a label \(y \in \{0,1,\dots,K-1\}\).” | Removes ambiguity and gives direction. |
-| **2. Research question / hypothesis** | Specify exactly **what you are testing**. <br>Is it a new loss, a data-augmentation trick, or a training schedule? | Keeps experiments focused; prevents scope creep. |
-| **3. Baselines and comparisons** | List existing methods you will compare against and justify the choice. | Makes results easier to interpret and publish. |
-| **4. Evaluation metrics** | Pick metrics that match the goal (e.g., accuracy, F1, MAE, BLEU). Define how each metric is calculated. | A metric defined up front prevents “metric shopping” after the fact. |
-| **5. Success criteria** | State the test or comparisons that will show if there is an improvement. | Allows objective and significantconclusions. |
+### 1.2 Hydra for systematic runs
 
-Spend time on this step; a precise target makes every later script simpler to write and review.
+Hydra minimizes setup effort and maximizes flexibility:
 
-### 1.3 Workflow Overview
-
-When you turn a research question into code, follow these steps:
-
-1. **Describe one experimental run.**  
-   A run is the smallest unit that produces a set of results (for example: train ➜ evaluate ➜ save metrics).
-
-2. **List parameters you want to vary.**  
-   Think of models, hyper-parameters, datasets, data splits, or random seeds.
-
-3. **Group runs into an experiment sweep.**  
-   Running the same code many times with different parameters lets you build fair comparisons and collect statistics.
-
-4. **Automate runs with a task manager.**  
-   Here we use **Hydra**, which was built at Facebook AI Research to launch Python functions from the command line while reading YAML configuration files.  
-   - Each run gets its own config snapshot.  
-   - You can override any parameter from the shell.  
-   - Multirun mode lets you queue many jobs at once.  
-
-5. **Aggregate results and create a report.**  
-   A separate script loads all run outputs, computes summary tables/plots, and writes a PDF or notebook that can be copied straight into a thesis.
+- Centralize configuration in YAML files.  
+- Override any parameter at runtime via CLI.  
+- Use multirun mode to launch parameter sweeps automatically.  
+- Record each run’s config snapshot for full reproducibility.  
+- Scale locally or on HPC using launcher plugins with no code changes.  
 
 ---
+
 
 ## 2. Repository Structure
 
