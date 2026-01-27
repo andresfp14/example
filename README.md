@@ -1,240 +1,219 @@
-
-# Example Repository: Workflow
-
-This repository is a template for structuring (empirical) machine-learning projects, especially for bachelor and master thesis work. It shows how to organize experiments, manage configurations, run evaluations, and generate results in a clean and reproducible way.
-
----
-
-## 1. Why plan experiments up front?
-
-Planning experiments at the start adds minimal overhead, clarifies objectives, and accelerates scalable, reproducible research.
-
-### 1.1 Key questions to answer
-
-TBH, we recommend to first have a clear problem definition of what you are trying to do, think first, code second. Some things you might want to take into account:
-
-- Entities & functions: What models, datasets, vector spaces, and mappings are involved on your problem?  
-- Goals & metrics: What do you want to achieve, and how will performance be measured?  
-- Parameters to vary: Which hyperparameters, models, processes, or data splits will change?  
-- Sanity checks: How will you validate results and avoid errors?  
-- Infrastructure & results: Where will runs execute, and how will outputs be stored and aggregated?  
-
-Answering these upfront defines a clear, repeatable roadmap for any experiment.
-
-### 1.2 Hydra for systematic runs
-
-Hydra minimizes setup effort and maximizes flexibility:
-
-- Centralize configuration in YAML files.  
-- Override any parameter at runtime via CLI.  
-- Use multirun mode to launch parameter sweeps automatically.  
-- Record each run’s config snapshot for full reproducibility.  
-- Scale locally or on HPC using launcher plugins with no code changes.  
-
----
-
-
-## 2. Repository Structure
-
-```bash
-.
-├── modules/              # Code for training, evaluation, and utilities
-│   ├── training/
-│   ├── utils/
-├── data/                 # Data, model checkpoints, and generated reports
-│   ├── datasets/
-│   ├── models/
-│   └── reports/
-├── config/               # Hydra configuration files
-│   ├── train_model.yaml
-│   ├── report.yaml
-├── runs/                 # Scripts to run experiments and workflows
-│   ├── train.py
-│   ├── report.py
-│   └── run_all_tasks.*
-└── env_setup/            # Environment setup files
-    ├── Dockerfile
-    └── requirements.txt
-```
-
-### Why this structure is important
-
-- Separates code, data, and configuration.  
-- Makes debugging and extension easier.  
-- Helps other people understand your work quickly.  
-
----
-
-## 3. How to Run the Code
-
-### 3.1 Set up your Python environment
-
-A well-defined environment makes the code portable to different machines (local PC, lab server, or HPC cluster).  
-All required packages are listed in `./env_setup/requirements.txt`.
-
-Use either Conda or Virtualenv to create an isolated environment.
-
-**Using Conda**
-
-```bash
-conda create --prefix ./.venv python=3.10.4
-conda activate ./.venv
-pip install -r ./env_setup/requirements.txt
-```
-
-**Using Virtualenv**
-
-```bash
-python -m venv .venv
-source .venv/bin/activate     # Linux/Mac
-.venv\Scripts\activate        # Windows
-pip install -r ./env_setup/requirements.txt
-```
-
-### Why this matters
-
-- Keeps dependencies under control.  
-- Prevents conflicts with other Python projects.  
-
-### 3.2 Run experiments
-
-In this repository, a **task** is any shell call that triggers one logical step, such as a single training run or a report-generation job.
-
-Run single tasks:
-
-```bash
-python runs/train.py      # one training run
-python runs/report.py     # aggregate previous runs and build a report
-```
-
-Run the entire pipeline:
-
-```bash
-# Linux/Mac
-./run_all_tasks.sh
-
-# Windows
-run_all_tasks.bat
-```
-
-### Why this matters
-
-- Lets you test one step at a time or run everything in one command.  
-- Saves time when launching many experiments.  
-
----
-
-## 4. Hydra Basics
-
-[Hydra](https://hydra.cc/) lets you launch Python functions from the command line and manage configuration files.
-
-- Every YAML file in `./config/` defines default settings for one part of the project (model, data, training, launcher).  
-- You can override any field directly in the shell with `key=value`.  
-- **Multirun** mode runs many configurations back-to-back and stores each result in its own folder.
-
-### 4.1 Basic Run
-
-```bash
-python runs/train.py        # uses defaults in config/
-```
-
-Pass command-line overrides:
-
-```bash
-python runs/train.py training.epochs=10 model=net5
-```
-
-### 4.2 Run multiple experiments
-
-```bash
-python runs/train.py --multirun model=net2,net5 training.epochs=2,5
-```
-
-Hydra creates one sub-folder per setting.
-
-### 4.3 Run predefined experiments
-
-```bash
-python runs/train.py +experiment=sweep_models
-```
-
-The file `./config/experiment/sweep_models.yaml` lists all overrides for this sweep.
-
-### 4.4 Use launchers for parallel runs
-
-Launchers let you run many jobs in parallel on one machine or an HPC cluster.  
-Launcher configs live in `./config/launcher/`.  
-See the Hydra launcher docs: <https://hydra.cc/docs/advanced/launcher_plugins/>.
-
-```bash
-# Local CPU parallelism with joblib
-python runs/train.py --multirun +launcher=joblib
-
-# Slurm cluster
-python runs/train.py --multirun +launcher=slurm
-
-# Slurm with GPUs
-python runs/train.py --multirun +launcher=slurmgpu
-```
-
-### Why this matters
-
-- You can explore many settings with a single command.  
-- Hydra records every config, so you know exactly what produced each result.  
-- The same code you were running in your machine, can be run in a cluster with minimal changes or coding rabbit-holes (mostly).
-
----
-
-## 5. Tools
-
-Besides Python and Hydra, two tools are worth adding to your workflow.
-
-### 5.1 Docker
-
-Docker packages your code, environment, and dependencies into one container, so it runs the same on any operating system.
-
-```bash
-docker build -t example ./env_setup
-docker run -d --rm --name example --gpus all -v $(pwd):/home/example example bash
-```
-
-### Why this matters
-
-- Handy for sharing your work or moving it to a server.  
-- Removes “works on my machine” problems.  
-
-### 5.2 Rclone for syncing data
-
-`rclone` moves large datasets between your workstation and remote storage (e.g., S3, Google Drive).
-
-```bash
-rclone config
-rclone sync ./data/datasets remote:bucket/path -P --transfers=8
-```
-
-### Why this matters
-
-- Keeps local disks clean and backed up.  
-- Speeds up transfers to HPC clusters.  
-
----
-
-## 6. Using this Template
-
-This project is meant to help students organize and run machine-learning experiments. What's important is the abstract idea of organizing your thoughts and your code, not this specific implementation of it.
-
----
-
-## 7. References and Further Reading
-
-- [Hydra Documentation](https://hydra.cc/)  
-- [Reproducibility in Machine Learning](https://www.nature.com/articles/s42256-019-0035-4)  
-- [Ten Simple Rules for Reproducible Research](https://doi.org/10.1371/journal.pcbi.1003285)  
-- [ML Experiment Tracking Tools](https://neptune.ai/blog/ml-experiment-tracking-tools)  
-- [Hydra Launcher Plugins](https://hydra.cc/docs/advanced/launcher_plugins/)  
-- [Docker Official Docs](https://docs.docker.com/)  
-- [Rclone Documentation](https://rclone.org/)  
-
----
-
-The exact folder names and tools can change, but the key idea stays the same: **a clear, automated workflow makes large-scale experimentation faster, easier to debug, and easier for others to reproduce.**
+# Example: an empirical experimental pipeline with hydra
+
+## 1) Objective
+This repository is a teaching template that demonstrates how to build, run, and compare empirical ML experiments using Hydra. It shows students how to keep configs, code, and results organized so ideas can be tested quickly and reproduced later.
+
+## 2) Motivation
+Structuring experiments up front reduces “glue code”, makes every run reproducible, and keeps baselines and new ideas directly comparable. The same layout scales from a laptop to large parallel executions (joblib locally or Slurm on HPC) without refactoring. A clean layout also helps collaborators (and future you) understand what was run, with which settings, and where the results live.
+
+## 3) Ask yourself first
+- What exact question am I answering, and which metrics define success?
+- Which datasets, models, and hyperparameters will vary?
+- What baselines will I compare against?
+- How will I ensure repeatability (seeds, logged configs, versioned data/code)?
+- Where will results be stored and how will they be aggregated?
+- What compute/launcher do I need (local, joblib, Slurm, GPU)?
+
+## 4) Repository structure (what goes where)
+- `config/` — Hydra configs split by domain (model, data, training, launcher, experiments). Add new models by creating a new YAML under `config/model/`, e.g., `net_bn.yaml` pointing to a class in `modules/models/`.
+- `modules/` — Python source. Put new model code in `modules/models/`, datasets in `modules/datasets/`, training loops in `modules/training/`, shared utilities in `modules/utils/`.
+- `runs/` — CLI entrypoints (tasks). Keep each logical task here (e.g., `train.py`, `report.py`).
+- `data/` — downloaded datasets or artifacts.
+- `run_all_tasks.*` — convenience scripts to chain tasks.
+- `env_setup/` — environment files (Dockerfile, requirements).
+- Outputs — Hydra writes under `outputs/...`; trained models and `result.json` per run go under `models/...` (see `config/path/relative.yaml`).
+
+If you add a new model: implement it in `modules/models/my_model.py`, expose it via `_target_` in a new `config/model/my_model.yaml`, then reference it on the CLI with `model=my_model`.
+
+## 5) Designing the pipeline
+**Why structure experiments first?**  
+- Removes ambiguity: goals, metrics, and success criteria are written down before coding.  
+- Reproducibility by default: every run records the exact config snapshot Hydra used.  
+- Faster iteration: you can sweep parameters or models with one CLI call instead of editing code.  
+- Comparability: baselines and new ideas share the same data/metrics pipeline.  
+
+**What to consider**  
+- **Baselines:** start with `modules/models/simple_net.py` (`config/model/net2.yaml`) and compare to the BatchNorm variant `modules/models/simple_net_bn.py` (`config/model/net_bn.yaml`).  
+- **Repeatability:** set `seed` in `config/train_model.yaml`; Hydra stores the resolved config per run.  
+- **Ease of use & readability:** prefer small, composable YAML files; override via CLI instead of editing Python.  
+
+## 6) Configs and instantiation
+- A config is a declarative YAML describing how to build an object. Hydra injects `_target_` to map config → Python class.  
+- Example models:  
+  - `config/model/net2.yaml`
+    ```yaml
+    object:
+      _target_: modules.models.simple_net.Net
+      num_layers: 2
+      latent_dim: 128
+    ```
+  - `config/model/net_bn.yaml`
+    ```yaml
+    object:
+      _target_: modules.models.simple_net_bn.NetBN
+      num_layers: 2
+      latent_dim: 128
+      dropout: 0.3
+    ```
+- Instantiation happens inside `runs/train.py`:
+  ```python
+  train_loader = hydra.utils.instantiate(cfg.data.dataloaders.train)
+  test_loader = hydra.utils.instantiate(cfg.data.dataloaders.test)
+  model = hydra.utils.instantiate(cfg.model.object).to(device)
+  ```
+- Equivalent manual Python (without Hydra) for the BatchNorm variant:
+  ```python
+  from modules.models.simple_net_bn import NetBN
+
+  model = NetBN(num_layers=2, latent_dim=128, dropout=0.3)
+  model = model.to(device)
+  ```
+
+## 7) Anatomy of a single run
+- A **run** = one merged config group (model + data + training + path + optional launcher).  
+- `runs/train.py` sequence: seed setup → instantiate dataloaders → instantiate model → train/evaluate → save checkpoint + `result.json`.  
+- Outputs go to `${path.base_path}/outputs/...` and `${path.base_path_models}/...` (see `config/path/relative.yaml`).  
+
+## 8) Running tasks (env + single run + overrides)
+- Create environment (choose one):
+  ```bash
+  # Conda
+  conda create --prefix ./.venv python=3.11
+  conda activate ./.venv
+  pip install -r env_setup/requirements.txt
+
+  # venv
+  python -m venv .venv
+  source .venv/bin/activate      # Linux/Mac
+  .venv\Scripts\activate         # Windows
+  pip install -r env_setup/requirements.txt
+  ```
+- Default run:
+  ```bash
+  python runs/train.py
+  ```
+- Override on the fly:
+  ```bash
+  python runs/train.py model=net_bn training.epochs=3 seed=123
+  ```
+- Change layers without touching code:
+  ```bash
+  python runs/train.py model.object.num_layers=5
+  ```
+
+## 9) Experiments as sweeps
+- Multirun example:
+  ```bash
+  python runs/train.py --multirun model=net2,net_bn seed=0,1,2 training.epochs=2
+  ```
+- Preset sweep (`config/experiment/sweep_models.yaml`):
+  ```bash
+  python runs/train.py +experiment=sweep_models
+  ```
+  (Edit the YAML to add `net_bn` if you want it included.)
+- Example sweep YAML (what it does):
+  ```yaml
+  # config/experiment/sweep_models.yaml
+  defaults:
+    - override /training: basic
+
+  hydra:
+    mode: MULTIRUN
+    sweeper:
+      params:
+        model: net2,net5,net7   # try three model depths
+        seed: range(0,5)        # run seeds 0–4 for robustness
+        training.epochs: 3      # fix epochs for all runs
+  ```
+  Runs 3 models × 5 seeds = 15 jobs, each with 3 epochs, storing one config/output folder per job.
+
+## 10) Launchers (local and HPC)
+- Hydra swaps launch backends via the `launcher` config group. Select with `+launcher=...`.
+- Local parallel jobs: `+launcher=joblib` splits multirun work across CPU cores.
+- Slurm CPU: `+launcher=slurm`
+- Slurm GPU example (`config/launcher/slurmgpu.yaml`):
+  ```yaml
+  defaults:
+    - override /hydra/launcher: submitit_slurm
+
+  hydra:
+    callbacks:
+      log_job_return:
+        _target_: hydra.experimental.callbacks.LogJobReturnCallback
+    launcher:
+      setup:
+        - "module load Python/3.10.4 2>&1"
+        - "module load CUDA/12.6.3 2>&1"
+        - ". .venv/bin/activate"
+        - "nvidia-smi"
+        - "python -m torch.utils.collect_env"
+      submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+      cpus_per_task: 20         # CPU cores per job
+      gpus_per_node: 1          # request one GPU
+      gres: "gpu:1"             # Slurm gres string
+      tasks_per_node: 1
+      array_parallelism: 50     # how many array jobs run in parallel
+      timeout_min: 30           # walltime per job
+  ```
+- What it does: running `python runs/train.py --multirun +launcher=slurmgpu` submits a Slurm array via SubmitIt; each job loads modules, activates the venv, collects env info, and trains on one GPU. Logs/config snapshots stay under `outputs/...` and `.submitit/...`.
+
+## 11) End-to-end experimentation flow
+1) Sweep over models:  
+   ```bash
+   python runs/train.py --multirun model=net2,net_bn seed=0,1,2 training.epochs=2
+   ```  
+   Hydra/SubmitIt fans out jobs; each run writes its merged config, checkpoint, and `result.json` into its own output folder.
+2) Generate the report:  
+   ```bash
+   python runs/report.py base_dir=./models
+   ```  
+   The reporter uses helper aggregator utilities (`modules/utils/aggregator.py`) to load every `result.json`, normalize to a DataFrame, compute mean/±std, and emit `results_table.csv` plus `results_plot.png`.
+3) One-click reproducibility: `./run_all_tasks.sh` (Linux/Mac) or `run_all_tasks.bat` (Windows) chain the same sweep-and-report steps, so anyone can rerun the complete pipeline end-to-end—locally or at cluster scale—without editing code.
+
+## 12) Aggregating and comparing results
+- After runs finish, collect metrics into tables/plots:
+  ```bash
+  python runs/report.py base_dir=./models
+  ```
+- Output: `results_table.csv`, `results_plot.png` in `reports/...`, showing means and ±std across models/seeds so you can pick winners (e.g., `simple_net` vs `simple_net_bn`).
+
+## 13) Naming conventions for outputs
+- Default naming in `config/train_model.yaml`: `${data.name}_${model.name}_${training.name}_${seed}` ensures one folder per parameter group.
+- To further disambiguate, append short suffixes via CLI: `suffix=_try1` or override `name=mnist_net_bn_lr1e-3_s123`.
+- Keep names deterministic (include model, key hyperparams, and seed) so aggregations cleanly group runs; avoid spaces or ambiguous labels.
+
+## 14) Portability with Docker
+- Build the image (uses `env_setup/Dockerfile`):
+  ```bash
+  docker build -t example-pipeline ./env_setup
+  ```
+- Run with project mounted:
+  ```bash
+  docker run --rm -it -v $(pwd):/workspace -w /workspace example-pipeline bash
+  ```
+- Why: identical environment on laptop, server, or CI; GPU pass-through works with `--gpus all` when the host has NVIDIA runtime.
+
+## 15) Moving data/results with rclone
+- Configure remote once:
+  ```bash
+  rclone config
+  ```
+- Sync datasets up/down (progress + parallel transfers):
+  ```bash
+  rclone sync ./data/datasets remote:bucket/path -P --transfers=8
+  ```
+- Mirror results to cloud for backup/sharing:
+  ```bash
+  rclone sync ./models remote:bucket/experiments/models -P
+  rclone sync ./outputs remote:bucket/experiments/outputs -P
+  ```
+- Tip: keep large artifacts out of git; use rclone to stage them where your Slurm jobs can read them.
+
+## 16) References and further reading
+- Hydra documentation: https://hydra.cc/
+- SubmitIt (Hydra launcher backend): https://github.com/facebookincubator/submitit
+- Reproducibility in ML: https://www.nature.com/articles/s42256-019-0035-4
+- Ten Simple Rules for Reproducible Research: https://doi.org/10.1371/journal.pcbi.1003285
+- Experiment tracking tools overview: https://neptune.ai/blog/ml-experiment-tracking-tools
+- Docker docs: https://docs.docker.com/
+- rclone docs: https://rclone.org/
