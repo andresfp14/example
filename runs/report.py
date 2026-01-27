@@ -64,29 +64,25 @@ def main(cfg: DictConfig) -> None:
     """
 
     ##############################
-    # Preliminaries
+    # Step 1: Preliminaries
     ##############################
-
-    # Initialize logger
+    # 1) Init logger; 2) ensure output directory exists
     logger = logging.getLogger("report")
-
-    # Create output directory
     output_dir = Path(cfg.save_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     ##############################
-    # Load and Process Results
+    # Step 2: Load and normalize results
     ##############################
-
-    # Load results from the specified directory
+    # 1) Pull every subfolder under base_dir
     results = load_folders(Path(cfg.base_dir), max_pool=cfg.max_pool)
+    # 2) Flatten nested dicts into a DataFrame for aggregation
     df = pd.json_normalize(results)
 
     ##############################
-    # Create Aggregated Table
+    # Step 3: Build aggregated table
     ##############################
-
-    # Define column mappings for metrics and aggregation
+    # 1) Choose metric and grouping columns
     metrics_columns = {
         **{c:c.replace("result.","") for c in df.columns if ("result." in c)}, 
         **{"run_info.total_time_seconds": "time"}
@@ -95,30 +91,17 @@ def main(cfg: DictConfig) -> None:
         "config.data.name": "dataset",
         "config.model.name": "model"
     }
-
-    # Combine column mappings
-    cols_renaming = {
-        **metrics_columns,
-        **agg_columns,
-    }
-
-    # Get lists of columns
+    # 2) Rename/select columns, then compute mean/std
+    cols_renaming = {**metrics_columns, **agg_columns}
     metrics_columns_list = list(metrics_columns.values())
     agg_columns_list = list(agg_columns.values())
-
-    # Rename and select columns
     dft = df.rename(columns=cols_renaming)
     dft = dft[metrics_columns_list + agg_columns_list]
-
-    # Calculate mean and standard deviation
     dft_mean = dft.groupby(agg_columns_list)[metrics_columns_list].mean().reset_index()
     dft_std = dft.groupby(agg_columns_list)[metrics_columns_list].std().reset_index().fillna(0.001)
     dft_std[dft_mean.isna()] = np.nan
-
-    # Merge mean and std results
+    # 3) Merge mean/std and render mean ± std strings
     dft_merged = pd.merge(dft_mean, dft_std, on=agg_columns_list, suffixes=('_mean', '_std'))
-
-    # Create final formatted table
     dft_txt = dft_merged.copy()
     for col in metrics_columns_list:
         mean_col = f"{col}_mean"
@@ -128,45 +111,31 @@ def main(cfg: DictConfig) -> None:
             axis=1
         )
         dft_txt.drop(columns=[mean_col, std_col], inplace=True)
-
-    # Save the aggregated table
+    # 4) Save tables (CSV + LaTeX)
     table_path = output_dir / "results_table.csv"
     dft_txt.to_csv(table_path, index=False)
     dft_txt.to_latex(table_path.with_suffix(".tex"), index=False)
     logger.info(f"Results table saved to: {table_path}")
 
     ##############################
-    # Create Visualization
+    # Step 4: Visualize metrics
     ##############################
-
-    # Set the style
     sns.set_palette("husl")
-
-    # Create figure with subplots
     n_metrics = len(metrics_columns_list)
     n_cols = min(3, n_metrics)  # Maximum 3 plots per row
     n_rows = (n_metrics + n_cols - 1) // n_cols
-
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows))
     if n_metrics == 1:
         axes = np.array([axes])
     axes = axes.flatten()
-
-    # Create boxplots for each metric
     for idx, metric in enumerate(metrics_columns_list):
         ax = axes[idx]
-        # Create boxplot
         sns.boxplot(data=dft, x='model', y=metric, hue='model', ax=ax)
         ax.set_title(f'{metric}')
         ax.set_ylabel(metric)
-        # Rotate x-axis labels if they're too long
         ax.tick_params(axis='x', rotation=45)
-
-    # Remove any empty subplots
     for idx in range(n_metrics, len(axes)):
         fig.delaxes(axes[idx])
-
-    # Adjust layout and save the plot
     plt.tight_layout()
     plot_path = output_dir / "results_plot.png"
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
@@ -174,7 +143,9 @@ def main(cfg: DictConfig) -> None:
     plt.close()
     logger.info(f"Results plot saved to: {plot_path}")
 
-    # Save the configuration
+    ##############################
+    # Step 5: Save config snapshot
+    ##############################
     config_path = output_dir / "config.yaml"
     OmegaConf.save(cfg, config_path)
     logger.info(f"Configuration saved to: {config_path}")

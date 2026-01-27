@@ -20,26 +20,26 @@ def load_files(directory_path):
     base_path = Path(directory_path)
     data_dict = {}
 
-    # directory_path = str(directory_path).replace("\\", "/")
+    # 1) Track which folder these files came from
     data_dict["_directory"] = directory_path
 
-    # Load yaml files
+    # 2) Load YAML files (resolve OmegaConf where possible)
     for file_path in base_path.rglob("*.yaml"):
         content = OmegaConf.load(str(file_path))
         key = file_path.relative_to(base_path).as_posix().replace("\\", "/").replace("/", ".").replace(file_path.suffix, "")
         try:
             data_dict[key] = OmegaConf.to_container(content, resolve=True)
-        except Exception as e:
+        except Exception:
             data_dict[key] = OmegaConf.to_container(content, resolve=False)
 
-    # Load json files
+    # 3) Load JSON files
     for file_path in base_path.rglob("*.json"):
         with open(file_path, "r", encoding="utf-8") as f:
             content = json.load(f)
         key = file_path.relative_to(base_path).as_posix().replace("\\", "/").replace("/", ".").replace(file_path.suffix, "")
         data_dict[key] = content
 
-    # Load csv files
+    # 4) Record CSV file paths (left as strings for later pandas loading)
     for file_path in base_path.rglob("*.csv"):
         key = file_path.relative_to(base_path).as_posix().replace("\\", "/").replace("/", ".").replace(file_path.suffix, "")
         data_dict[key] = str(file_path)
@@ -59,8 +59,8 @@ def load_folders(base_dir, max_pool=8):
 
     # Use multiprocessing Pool
     with Pool(processes=max_pool) as p:
-        # Map the list of subfolders to the _load_subfolder function
-        # and wrap with tqdm for a progress bar
+        # 1) Map each subfolder to load_files
+        # 2) Wrap with tqdm for visibility when many runs exist
         results = list(
             tqdm(
                 p.imap(load_files, subfolders),

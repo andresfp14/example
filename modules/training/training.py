@@ -23,36 +23,30 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
     """
 
     ##############################
-    # Device Setup
+    # Step 1: Device setup
     ##############################
     device = "cuda" if (cfg.device=="cuda" and torch.cuda.is_available()) else "cpu"
     model.to(device)
 
     ##############################
-    # Object Instantiation
+    # Step 2: Instantiate training objects
     ##############################
-    # Instantiate loss function
+    # 1) Loss, 2) optimizer, 3) scheduler
     criterion = hydra.utils.instantiate(cfg.loss)
-
-    # Instantiate optimizer
     optimizer = hydra.utils.instantiate(cfg.optimizer, model.parameters())
-
-    # Instantiate scheduler
     scheduler = hydra.utils.instantiate(cfg.scheduler, optimizer)
-
-    # Initialize loggers
+    # 4) Loggers (e.g., tensorboard/CSV)
     loggers = [hydra.utils.instantiate(logger_cfg) for logger_cfg in cfg.loggers.values()]
     logger = logging.getLogger("training")
-
-    # scaler for automatic mixed precision
+    # 5) AMP scaler for mixed precision
     scaler = torch.amp.GradScaler(device)
 
     ##############################
-    # Epoch Loop
+    # Step 3: Epoch loop
     ##############################
     for epoch in range(cfg.epochs):
         ##############################
-        # Training Loop
+        # 3.1 Training loop
         ##############################
         model.train()
         train_loss = 0.0
@@ -67,7 +61,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
             # Accumulates scaled gradients.
             scaler.scale(loss_acc).backward()
 
-            # Gradient accumulation
+            # Gradient accumulation step
             if (batch_idx + 1) % cfg.gradient_accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
                 scaler.step(optimizer)
                 scaler.update()
@@ -78,7 +72,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
         train_loss /= len(train_loader)
 
         ##############################
-        # Validation Loop
+        # 3.2 Validation loop
         ##############################
         model.eval()
         val_loss = 0.0
@@ -99,14 +93,14 @@ def train_model(model: nn.Module, train_loader: DataLoader, valid_loader: DataLo
         logger.info(f"Epoch {epoch+1} Train Loss: {train_loss:.4f} Valid Loss: {val_loss:.4f}")
 
         ##############################
-        # End of epoch
+        # 3.3 End-of-epoch updates
         ##############################
         # Step the scheduler
         if isinstance(scheduler, ReduceLROnPlateau):
             scheduler.step(val_loss)
 
     ##############################
-    # Saving Results
+    # Step 4: Finalize & save logs
     ##############################
     for logger_ in loggers:
         logger_.save()

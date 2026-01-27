@@ -86,45 +86,35 @@ def main(cfg: DictConfig) -> None:
     """
 
     ##############################
-    # Preliminaries
+    # Step 1: Preliminaries
     ##############################
-
-    # directory for saving models and results
+    # 1) Pick save directory and seed everything for reproducibility
     model_save_dir = Path(cfg.save_dir)
-
-    # Set the random seed for reproducibility
     seed_everything(cfg.seed)
-
-    # Select the device for computation (CUDA, MPS, or CPU)
+    # 2) Select compute device based on config and availability
     device = "cuda" if (cfg.training.device=="cuda" and torch.cuda.is_available()) else "cpu"
 
     ##############################
-    # Object Instantiation
+    # Step 2: Instantiate objects from config
     ##############################
-
-    # Instantiate data loaders
+    # 1) Data loaders (train/test) are created directly from Hydra configs
     train_loader = hydra.utils.instantiate(cfg.data.dataloaders.train)
     test_loader = hydra.utils.instantiate(cfg.data.dataloaders.test)
-
-    # Instantiate model
+    # 2) Model instantiated from config and moved to device
     model = hydra.utils.instantiate(cfg.model.object).to(device)
 
     ##############################
-    # Actual Task: Training Loop
+    # Step 3: Execute task (training loop)
     ##############################
-
-    # Training loop    
     result = train_model(model, train_loader, test_loader, cfg.training)
 
     ##############################
-    # Saving Results
+    # Step 4: Persist artifacts
     ##############################
-
-    # Save the model checkpoint if configured to do so
+    # 1) Save model checkpoint
     model_path = model_save_dir / f"checkpoint.ckpt"
     torch.save(model.state_dict(), model_path)
-
-    # save the result
+    # 2) Save metrics/results
     result_path = model_save_dir / f"result.json"
     with open(result_path, "w") as f:
         json.dump(result, f, indent=4)
