@@ -78,7 +78,7 @@ If you add a new model: implement it in `modules/models/my_model.py`, expose it 
 - Create environment (choose one):
   ```bash
   # Conda
-  conda create --prefix ./.venv python=3.11
+  conda create --prefix ./.venv python=3.12.3
   conda activate ./.venv
   pip install -r env_setup/requirements.txt
 
@@ -142,7 +142,7 @@ If you add a new model: implement it in `modules/models/my_model.py`, expose it 
         _target_: hydra.experimental.callbacks.LogJobReturnCallback
     launcher:
       setup:
-        - "module load Python/3.10.4 2>&1"
+        - "module load Python/3.12.3 2>&1"
         - "module load CUDA/12.6.3 2>&1"
         - ". .venv/bin/activate"
         - "nvidia-smi"

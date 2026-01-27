@@ -8,7 +8,7 @@ hydra:
       _target_: hydra.experimental.callbacks.LogJobReturnCallback
   launcher: # https://hydra.cc/docs/plugins/submitit_launcher/
     setup: [
-      "echo '# Loading python module!'", "module load Python/3.10.4 2>&1",
+      "echo '# Loading python module!'", "module load Python/3.12.3 2>&1",
       "echo '# Loading CUDA module!'", "module load CUDA/12.6.3 2>&1",
       "echo '# List of modules:'", "module list 2>&1",
       "echo '# Current working directory:'", "pwd", 
