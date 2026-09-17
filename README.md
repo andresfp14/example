@@ -32,7 +32,7 @@ The example compares small MNIST classifiers; replace them with your research.
    $x_i\in\mathbb{R}^{1\times28\times28}$ has a label $y_i\in\{0,\ldots,9\}$.
    A network $f_{\theta,d}$ with parameters $\theta$ and depth $d\in\{2,5\}$ maps
    an image to ten logits. Softmax converts these scores into class probabilities:
-   $p_{\theta,d}(x)=\operatorname{softmax}(f_{\theta,d}(x))$.
+   $p_{\theta,d}(x)=\mathrm{softmax}(f_{\theta,d}(x))$.
 
    The training objective is mean cross-entropy:
 
@@ -46,7 +46,7 @@ The example compares small MNIST classifiers; replace them with your research.
 
    Evaluation disables dropout. The primary metric is accuracy on a held-out set $D$:
 
-   $$\operatorname{Acc}(\theta,d;D)=\frac{1}{|D|}\sum_{(x,y)\in D}\mathbf{1}\!\left[\arg\max_k f_{\theta,d}(x)_k=y\right].$$
+   $$\mathrm{Acc}(\theta,d;D)=\frac{1}{|D|}\sum_{(x,y)\in D}\mathbf{1}\!\left[\arg\max_k f_{\theta,d}(x)_k=y\right].$$
 
    Generalization claims assume that evaluation data represent the target
    population. Validation supports development; the separate test set is reserved
