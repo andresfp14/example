@@ -1,32 +1,22 @@
+"""Explicit randomness and compute settings for an experiment."""
+
 import os
 import random
+
 import numpy as np
 import torch
 
-def seed_everything(seed=0):
-    """
-    Sets the random seed for various libraries to ensure reproducibility.
 
-    Args:
-    - seed (int): Seed value. Default is 0.
-
-    Note:
-    This function sets seeds for the Python standard library, NumPy, and PyTorch.
-    Additionally, it sets the environment variable for PL_GLOBAL_SEED.
-    """
-    
-    # Set seed for the Python standard library's random module
+def configure(seed: int, device: str, deterministic: bool, threads: int) -> torch.device:
+    # 1. Set the CUDA workspace before any GPU operations.
+    if deterministic:
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    # 2. Seed the random generators used by the example.
     random.seed(seed)
-    
-    # Set seed for NumPy
     np.random.seed(seed)
-    
-    # Set seed for PyTorch
     torch.manual_seed(seed)
-    
-    # If CUDA is available, set the seed for all GPUs
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    
-    # Set environment variable for PyTorch Lightning's global seed
-    os.environ["PL_GLOBAL_SEED"] = str(seed)
+    # 3. Apply the requested execution settings; PyTorch reports unsupported devices.
+    torch.set_num_threads(threads)
+    torch.use_deterministic_algorithms(deterministic)
+    torch.backends.cudnn.benchmark = False
+    return torch.device(device)

@@ -1,49 +1,44 @@
+"""A small MNIST classifier returning unnormalized class logits."""
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
+
 
 class Net(nn.Module):
-    def __init__(self, num_layers=1, latent_dim=128):
-        super(Net, self).__init__()
-        self.num_layers = num_layers
-        self.latent_dim = latent_dim
-        
-        # Convolutional layers
-        self.conv1 = nn.Conv2d(1, 32, 3, 1)
-        self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        
-        # Dropout layers
-        self.dropout1 = nn.Dropout(0.25)
-        self.dropout2 = nn.Dropout(0.5)
-        
-        # First fully connected layer
-        self.fc1 = nn.Linear(9216, latent_dim)
-        
-        # Intermediate fully connected layers
-        self.fc_intermediates = nn.ModuleList(
-            [nn.Linear(latent_dim, latent_dim) for _ in range(num_layers - 1)]
-        )
-        
-        # Output layer
-        self.fc2 = nn.Linear(latent_dim, 10)
+    """Map (batch, 1, 28, 28) images to (batch, 10) logits.
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
-        x = torch.flatten(x, 1)
-        x = self.fc1(x)
-        x = F.relu(x)
-        
-        # Apply the intermediate fully connected layers
-        for fc in self.fc_intermediates:
-            x = fc(x)
-            x = F.relu(x)
-        
-        x = self.dropout2(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return output
+    num_layers counts hidden linear layers; BatchNorm is an optional ablation.
+    """
+
+    def __init__(
+        self,
+        num_layers: int = 2,
+        latent_dim: int = 128,
+        dropout: float = 0.25,
+        batch_norm: bool = False,
+    ):
+        super().__init__()
+        # 1. Extract image features, optionally adding BatchNorm.
+        features = []
+        for incoming, outgoing in ((1, 32), (32, 64)):
+            features.append(nn.Conv2d(incoming, outgoing, 3))
+            if batch_norm:
+                features.append(nn.BatchNorm2d(outgoing))
+            features.append(nn.ReLU())
+        features.extend([nn.MaxPool2d(2), nn.Flatten(), nn.Dropout(dropout)])
+        self.features = nn.Sequential(*features)
+        # 2. Vary the hidden linear depth while keeping the output classes fixed.
+        hidden = []
+        for layer in range(num_layers):
+            hidden.extend(
+                [
+                    nn.Linear(9216 if layer == 0 else latent_dim, latent_dim),
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
+                ]
+            )
+        self.classifier = nn.Sequential(*hidden, nn.Linear(latent_dim, 10))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # 1. Map image features to ten unnormalized class scores.
+        return self.classifier(self.features(x))

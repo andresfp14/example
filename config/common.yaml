@@ -1,0 +1,20 @@
+study: example
+# Tasks define save_dir; these lifecycle options are shared across projects.
+save_dir: ???
+mode: base
+max_retries: 0
+retry_delay: 5
+wrapper_quiet: false
+venv_force: false
+venv: .venv
+paths:
+  data: ${hydra:runtime.cwd}/data
+  outputs: ${paths.data}/outputs
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: ${hydra.runtime.cwd}/data/outputs/${study}/logs/${now:%Y%m%d_%H%M%S_%f}
+  sweep:
+    dir: ${hydra.runtime.cwd}/data/outputs/${study}/logs/${now:%Y%m%d_%H%M%S_%f}
+    subdir: ${hydra.job.num}

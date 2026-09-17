@@ -1,0 +1,7 @@
+defaults:
+  - common
+  - _self_
+run_dir: ???
+device: cpu
+
+save_dir: ${paths.outputs}/${study}/evaluate/${config_hash:${run_dir},${device}}

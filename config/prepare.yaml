@@ -1,0 +1,5 @@
+defaults:
+  - common
+  - data: mnist
+  - _self_
+save_dir: ${paths.outputs}/${study}/prepare/${config_hash:${data}}

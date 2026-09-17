@@ -1,11 +1,8 @@
 # @package _global_
-defaults:
-  - override /training: basic
-
-hydra: 
+study: depth_comparison
+hydra:
   mode: MULTIRUN
   sweeper:
     params:
-      model: net2,net5,net7
-      seed: range(0,5)
-      training.epochs: 3
+      model.object.num_layers: 2,5
+      seed: 0,1,2

@@ -1,154 +1,84 @@
-# Add the parent directory to the Python path
-import sys
+"""Compare validation results across seeds within one study."""
+
+import hashlib
+import json
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import logging
-from modules.utils.aggregator import load_folders
-from modules.utils.hydraqol import run_decorator
 
-# Registering the config path with Hydra
+from modules.utils.hydraqol import read_run_info, run_decorator
+
+
 @hydra.main(config_path="../config", config_name="report", version_base="1.3")
 @run_decorator
-def main(cfg: DictConfig) -> None:
-    """
-    Main function for aggregating and reporting results from multiple training runs.
-    Creates both tabular and visual representations of the results.
+def main(cfg) -> None:
+    import matplotlib
+    import pandas as pd
+    from omegaconf import OmegaConf
 
-    Args:
-        cfg (DictConfig): Configuration object containing all parameters and sub-configurations.
-            Structure and default values of cfg are as follows:
-            ```
-            defaults:
-              - _self_
-              - path: relative
-            
-            base_dir: ${path.base_path_models}  # Base directory for loading results
-            max_pool: 8  # Maximum number of parallel processes
-            
-            # Output path name
-            name: report_${now:%Y-%m-%d_%H-%M-%S}
-            
-            # Hydraqol parameters
-            save_dir: ${path.base_path}/reports/${name}
-            mode: base
-            retry:
-              max_retries: 3
-              delay: 5
-            ```
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
-    Returns:
-        None: This function does not return any value.
+    folder = Path(cfg.save_dir)
+    # 1. Collect completed runs and show which unfinished runs were skipped.
+    rows = []
+    source = Path(cfg.paths.outputs) / cfg.study / "train"
+    for run in sorted(source.iterdir()):
+        info = read_run_info(run)
+        if info["state"] != "completed":
+            print(f"Skipped {run.name}: {info['state']}")
+            continue
+        config = OmegaConf.to_container(OmegaConf.load(run / "config.yaml"))
+        metrics = json.loads((run / "metrics.json").read_text(encoding="utf-8"))
 
-    Examples:
-        To run reporting with the default configuration:
-        ```bash
-        $ python runs/report.py
-        ```
-
-        To specify a different base directory:
-        ```bash
-        $ python runs/report.py base_dir="path/to/results"
-        ```
-
-        To change the number of parallel processes:
-        ```bash
-        $ python runs/report.py max_pool=4
-        ```
-    """
-
-    ##############################
-    # Step 1: Preliminaries
-    ##############################
-    # 1) Init logger; 2) ensure output directory exists
-    logger = logging.getLogger("report")
-    output_dir = Path(cfg.save_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    ##############################
-    # Step 2: Load and normalize results
-    ##############################
-    # 1) Pull every subfolder under base_dir
-    results = load_folders(Path(cfg.base_dir), max_pool=cfg.max_pool)
-    # 2) Flatten nested dicts into a DataFrame for aggregation
-    df = pd.json_normalize(results)
-
-    ##############################
-    # Step 3: Build aggregated table
-    ##############################
-    # 1) Choose metric and grouping columns
-    metrics_columns = {
-        **{c:c.replace("result.","") for c in df.columns if ("result." in c)}, 
-        **{"run_info.total_time_seconds": "time"}
-    }
-    agg_columns = {
-        "config.data.name": "dataset",
-        "config.model.name": "model"
-    }
-    # 2) Rename/select columns, then compute mean/std
-    cols_renaming = {**metrics_columns, **agg_columns}
-    metrics_columns_list = list(metrics_columns.values())
-    agg_columns_list = list(agg_columns.values())
-    dft = df.rename(columns=cols_renaming)
-    dft = dft[metrics_columns_list + agg_columns_list]
-    dft_mean = dft.groupby(agg_columns_list)[metrics_columns_list].mean().reset_index()
-    dft_std = dft.groupby(agg_columns_list)[metrics_columns_list].std().reset_index().fillna(0.001)
-    dft_std[dft_mean.isna()] = np.nan
-    # 3) Merge mean/std and render mean ± std strings
-    dft_merged = pd.merge(dft_mean, dft_std, on=agg_columns_list, suffixes=('_mean', '_std'))
-    dft_txt = dft_merged.copy()
-    for col in metrics_columns_list:
-        mean_col = f"{col}_mean"
-        std_col = f"{col}_std"
-        dft_txt[col] = dft_merged.apply(
-            lambda x: f"{x[mean_col]:.3f} ± {x[std_col]:.3f}" if not pd.isna(x[mean_col]) else "N/A",
-            axis=1
+        # 2. Group identical scientific settings; the training seed varies within a group.
+        settings = {key: config[key] for key in ("data", "model", "training")}
+        group = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:12]
+        rows.append(
+            {
+                "run": str(run),
+                "group": group,
+                "seed": config["seed"],
+                "model": config["model"]["name"],
+                "layers": config["model"]["object"]["num_layers"],
+                **metrics,
+            }
         )
-        dft_txt.drop(columns=[mean_col, std_col], inplace=True)
-    # 4) Save tables (CSV + LaTeX)
-    table_path = output_dir / "results_table.csv"
-    dft_txt.to_csv(table_path, index=False)
-    dft_txt.to_latex(table_path.with_suffix(".tex"), index=False)
-    logger.info(f"Results table saved to: {table_path}")
 
-    ##############################
-    # Step 4: Visualize metrics
-    ##############################
-    sns.set_palette("husl")
-    n_metrics = len(metrics_columns_list)
-    n_cols = min(3, n_metrics)  # Maximum 3 plots per row
-    n_rows = (n_metrics + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows))
-    if n_metrics == 1:
-        axes = np.array([axes])
-    axes = axes.flatten()
-    for idx, metric in enumerate(metrics_columns_list):
-        ax = axes[idx]
-        sns.boxplot(data=dft, x='model', y=metric, hue='model', ax=ax)
-        ax.set_title(f'{metric}')
-        ax.set_ylabel(metric)
-        ax.tick_params(axis='x', rotation=45)
-    for idx in range(n_metrics, len(axes)):
-        fig.delaxes(axes[idx])
-    plt.tight_layout()
-    plot_path = output_dir / "results_plot.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.savefig(plot_path.with_suffix(".pdf"), dpi=300, bbox_inches='tight')
-    plt.close()
-    logger.info(f"Results plot saved to: {plot_path}")
+    # 3. Keep raw rows and report counts so missing or repeated seeds stay visible.
+    frame = pd.DataFrame(rows)
+    frame.to_csv(folder / "runs.csv", index=False)
+    summary = (
+        frame.groupby(["group", "model", "layers"])
+        .agg(
+            runs=("seed", "size"),
+            seeds=("seed", "nunique"),
+            loss_mean=("valid_loss", "mean"),
+            loss_std=("valid_loss", "std"),
+            accuracy_mean=("valid_accuracy", "mean"),
+            accuracy_std=("valid_accuracy", "std"),
+        )
+        .reset_index()
+    )
+    summary.to_csv(folder / "summary.csv", index=False)
+    print(f"Completed runs: {len(frame)}")
+    print(summary.to_string(index=False))
 
-    ##############################
-    # Step 5: Save config snapshot
-    ##############################
-    config_path = output_dir / "config.yaml"
-    OmegaConf.save(cfg, config_path)
-    logger.info(f"Configuration saved to: {config_path}")
+    # 4. Show individual runs and their mean rather than only an aggregate score.
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for position, row in summary.iterrows():
+        values = frame.loc[frame.group == row.group, "valid_accuracy"]
+        ax.scatter([position] * len(values), values, alpha=0.6)
+        ax.plot(position, row.accuracy_mean, "k_")
+    ax.set_xticks(
+        range(len(summary)),
+        [f"{r.model}/{r.layers} {r.group[:6]}" for r in summary.itertuples()],
+    )
+    ax.set_ylabel("Validation accuracy (points: runs; line: mean)")
+    fig.tight_layout()
+    fig.savefig(folder / "comparison.png", dpi=180)
+    plt.close(fig)
 
-if __name__ == '__main__':
-    main() 
+
+if __name__ == "__main__":
+    main()

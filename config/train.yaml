@@ -1,0 +1,10 @@
+defaults:
+  - common
+  - data: mnist
+  - model: net
+  - training: basic
+  - _self_
+seed: 0
+
+# Include all scientific settings and the training seed in the run identity.
+save_dir: ${paths.outputs}/${study}/train/${config_hash:${data},${model},${training},${seed}}

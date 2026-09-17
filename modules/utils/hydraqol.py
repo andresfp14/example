@@ -1,262 +1,423 @@
-import os
-import sys
+"""Portable Hydra run lifecycle and resolvers (contract version 2).
+
+Modes: base skips completed runs; check only reports; clean removes incomplete
+runs and stops; force removes and reruns. Tasks return their own results unchanged.
+Multi-rank calls require an initialized process group before entering the decorator.
+"""
+
+import hashlib
+import importlib.metadata
+import inspect
+import itertools
 import json
 import logging
-import datetime
-import traceback
-import inspect
-from functools import wraps
-from pathlib import Path
-from omegaconf import OmegaConf
-from hydra.core.hydra_config import HydraConfig
+import multiprocessing
+import operator
+import os
+import platform
+import shlex
 import shutil
+import subprocess
+import sys
+import tempfile
 import time
+import traceback
+from datetime import UTC, datetime
+from functools import reduce, wraps
+from pathlib import Path
 
-################################################################################################
-# Custom run decorator
-################################################################################################
+from hydra.core.hydra_config import HydraConfig
+from hydra.utils import get_original_cwd
+from omegaconf import OmegaConf
+
+
 def run_decorator(func):
+    """Manage cfg.save_dir; keep task returns separate from lifecycle metadata."""
+
     @wraps(func)
     def wrapper(cfg, *args, **kwargs):
-        logger = logging.getLogger("wrapper")
-        start_time = datetime.datetime.now()
-        
-        # Get the script name from the function's definition location
-        script_path = inspect.getfile(func)
-        script_name = os.path.basename(script_path)
-        save_dir = Path(cfg.save_dir)
-        run_info_path = save_dir / "run_info.json"
-        config_path = save_dir / "config.yaml"
-        hydra_config_path = save_dir / "hydra_config.yaml"
-        procid = os.environ.get("SLURM_PROCID", "0")
+        # 1. Select the interpreter before touching this run's files.
+        script = Path(inspect.getfile(func)).resolve()
+        switched, result = venv_force_check(cfg, script)
+        if switched:
+            return result
+        root = Path(get_original_cwd() if HydraConfig.initialized() else Path.cwd()).resolve()
+        group = sys.modules.get("torch.distributed")
+        if group is None or not group.is_available() or not group.is_initialized():
+            group = None
+            if rank_info()[1] > 1:
+                raise RuntimeError("Initialize the process group before entering run_decorator")
+        rank = group.get_rank() if group is not None else rank_info()[0]
+        mode = cfg.get("mode", "base")
+        if mode not in ("base", "check", "clean", "force"):
+            raise ValueError(f"Unknown run mode: {mode}")
+        retries = max(0, int(cfg.get("max_retries", cfg.get("retry", {}).get("max_retries", 0))))
+        delay = cfg.get("retry_delay", cfg.get("retry", {}).get("delay", 5))
+        if group is not None and retries:
+            raise ValueError("Use the distributed launcher's restart policy, not task retries")
 
-        # Get the command and arguments that were executed
-        command = f"{sys.executable} {' '.join(sys.argv)}"
-        relative_command = f"{sys.executable} runs/{script_name} --config-path=../{save_dir} --config-name=config.yaml"
+        # 2. Let rank zero prepare the run and share its decision with every worker.
+        logger = logging.getLogger("hydraqol")
+        message = [None]
+        if group is None or rank == 0:
+            try:
+                folder = (root / cfg.save_dir).resolve()
+                cfg.save_dir = str(folder)
+                info = read_run_info(folder)
+                completed = info["state"] == "completed"
+                run = mode in ("base", "force") and (mode == "force" or not completed)
+                record = info if mode == "check" else None
+                if mode == "check":
+                    logger.info("%s: %s", folder, info["state"])
 
-        # Determine mode from cfg; defaults to 'base' if not specified
-        mode = getattr(cfg, "mode", "base")
-        valid_modes = ["base", "force", "clean", "check"]
-        if mode not in valid_modes:
-            raise ValueError(f"Invalid mode '{mode}'. Must be one of {valid_modes}.")
+                # 3. Only delete marked run folders, never the checkout or its parents.
+                if mode == "force" or (mode == "clean" and not completed):
+                    if folder.exists():
+                        if root.is_relative_to(folder) or not (folder / "config.yaml").is_file():
+                            raise ValueError(f"Not a removable run directory: {folder}")
+                        shutil.rmtree(folder)
 
-        # --------------------------------------------
-        # Step 1: Gather current run status information
-        # --------------------------------------------
-        save_dir_exists = save_dir.exists()
-        run_info_exists = run_info_path.exists()
-        config_exists = config_path.exists()
+                # 4. Save the resolved configuration, environment and provenance together.
+                if run:
+                    folder.mkdir(parents=True, exist_ok=True)
+                    OmegaConf.save(cfg, folder / "config.yaml", resolve=True)
+                    if (root / "uv.lock").exists():
+                        shutil.copyfile(root / "uv.lock", folder / "uv.lock")
+                    provenance = {}
+                    for key, command in (
+                        ("git_commit", ["rev-parse", "HEAD"]),
+                        ("git_status", ["status", "--porcelain"]),
+                    ):
+                        try:
+                            provenance[key] = subprocess.check_output(
+                                ["git", *command], cwd=root, stderr=subprocess.DEVNULL, text=True
+                            ).strip()
+                        except (OSError, subprocess.CalledProcessError):
+                            provenance[key] = None
+                    arguments = [sys.executable, str(script), *sys.argv[1:]]
+                    rerun = [
+                        sys.executable,
+                        str(script),
+                        f"--config-path={folder.as_posix()}",
+                        "--config-name=config",
+                        "mode=force",
+                    ]
+                    quote = subprocess.list2cmdline if os.name == "nt" else shlex.join
+                    record = {
+                        "schema_version": 2,
+                        "state": "running",
+                        "mode": mode,
+                        "executed_file": script.name,
+                        "save_dir": str(folder),
+                        "start_time": datetime.now(UTC).isoformat(),
+                        "command": quote(arguments),
+                        "argv": arguments,
+                        "relative_command": quote(rerun),
+                        "config_hash": config_hash(cfg),
+                        "python_version": sys.version,
+                        "hostname": platform.node(),
+                        **provenance,
+                        "packages": {
+                            d.metadata["Name"]: d.version
+                            for d in importlib.metadata.distributions()
+                        },
+                        "retry_count": 0,
+                        "error_files": [],
+                    }
+                    write_json(folder / "run_info.json", record)
+                message[0] = {"folder": str(folder), "run": run, "record": record}
+            except Exception:
+                if group is None:
+                    raise
+                message[0] = {"error": traceback.format_exc()}
+        if group is not None:
+            group.broadcast_object_list(message, src=0)
+        if "error" in message[0]:
+            raise RuntimeError(message[0]["error"])
+        folder, run, record = Path(message[0]["folder"]), message[0]["run"], message[0]["record"]
+        cfg.save_dir = str(folder)
+        if rank == 0 and not cfg.get("wrapper_quiet", False):
+            logger.info("%s %s: %s", mode, "run" if run else "skip", folder)
+        if not run:
+            if path := os.environ.get("HYDRA_VENV_RESULT"):
+                write_json(Path(path), record)
+            return record
+        if rank == 0 and cfg.get("printcfg", False):
+            logger.info("%s", OmegaConf.to_yaml(cfg, resolve=True))
+        started = time.perf_counter()
 
-        if not save_dir_exists:
-            run_status = "not run"
-        else:
-            if run_info_exists:
-                run_status = "completed"
-            elif config_exists:
-                run_status = "incomplete"
-            else:
-                run_status = "not run (only folder)"
-
-        # log status, mode, save_dir, and procid
-        logger.info("#" * 75)
-        logger.info(f"Executed command: {command}")
-        logger.info(f"Relative command: {relative_command}")
-        logger.info(f"script_name: {script_name}")
-        logger.info(f"state: {run_status}")
-        logger.info(f"mode: {mode}")
-        logger.info(f"save_dir: {save_dir}")
-        logger.info(f"proc ID: {procid}")
-        logger.info("#" * 30 + " TASK START " + "#" * 33)
-
-        # --------------------------------------------
-        # Step 2: Mode Handling
-        # --------------------------------------------
-        if mode == "check":
-            # Check mode: only check status and return
-            run_info = {
-                "state": run_status,
-                "mode": mode,
-                "func_name": func.__name__,
-                "executed_file": script_name,
-                "save_dir": str(cfg.save_dir),
-                "start_time": start_time.strftime('%Y-%m-%d %H:%M:%S'),
-                "end_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "total_time_seconds": (datetime.datetime.now() - start_time).total_seconds(),
-                "result": None,
-                "command": command
-            }
-            return run_info
-
-        if mode == "base":
-            # If run is completed, skip
-            if run_status == "completed":
-                logger.info(f"[BASE] Run already completed in {save_dir}. Skipping...")
-                return None
-        
-        if mode == "clean":
-            # If run is completed, skip
-            if run_status == "completed":
-                logger.info(f"[CLEAN] Run already completed in {save_dir}. Skipping...")
-                return None
-            
-            # Clean mode: delete existing run and executing
-            if save_dir_exists:
-                logger.info(f"[CLEAN] Deleting existing run in {save_dir}")
-                shutil.rmtree(save_dir)
-
-        if mode == "force":
-            # Force mode: delete existing run and start fresh
-            if save_dir_exists:
-                logger.info(f"[FORCE] Deleting existing run in {save_dir}")
-                shutil.rmtree(save_dir)
-                save_dir.mkdir(parents=True, exist_ok=True)
-
-        
-
-        # --------------------------------------------
-        # Step 3: Save Configuration
-        # --------------------------------------------
-        save_dir.mkdir(parents=True, exist_ok=True)
-        OmegaConf.save(cfg, config_path)
-        with open(config_path, 'r+') as f: 
-            content = f.read()
-            f.seek(0)
-            f.write('# @package _global_\n' + content)
-        #OmegaConf.save(HydraConfig.get(), hydra_config_path)
-
-        # --------------------------------------------
-        # Step 4: Execute Function with Retry Logic
-        # --------------------------------------------
-        max_retries = getattr(cfg, "max_retries", 0)
-        retry_delay = getattr(cfg, "retry_delay", 5)  # seconds
-        retry_count = 0
-        last_error = None
-        error_files = []
-
-        while retry_count <= max_retries:
+        # 5. Run with optional single-process retries and one error file per rank/attempt.
+        for attempt in range(retries + 1):
+            error, result = None, None
+            error_path = folder / f"error_p{rank}_attempt{attempt + 1}.txt"
             try:
                 result = func(cfg, *args, **kwargs)
-                break
-            except Exception as e:
-                last_error = e
-                retry_count += 1
-                
-                # Save error information for this attempt
-                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                error_file = save_dir / f"error_{timestamp}.txt"
-                error_files.append(str(error_file))
-                
-                with open(error_file, "w") as f:
-                    f.write(f"Attempt {retry_count} failed at {timestamp}\n")
-                    f.write(f"Error type: {type(e).__name__}\n")
-                    f.write(f"Error message: {str(e)}\n")
-                    f.write("\nFull traceback:\n")
-                    f.write(traceback.format_exc())
-                
-                if retry_count <= max_retries:
-                    logger.warning(f"Attempt {retry_count} failed: {str(e)}")
-                    logger.info(f"Error details saved to {error_file}")
-                    logger.info(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
-                else:
-                    logger.error(f"All {max_retries} attempts failed. Last error: {str(e)}")
-                    raise last_error
+            except Exception as caught:
+                error = caught
+                error_path.write_text(traceback.format_exc(), encoding="utf-8")
+            failures = [str(error_path) if error is not None else None]
+            if group is not None:
+                failures = [None] * group.get_world_size()
+                group.all_gather_object(failures, str(error_path) if error is not None else None)
+            failed = any(failures)
 
-        # --------------------------------------------
-        # Step 5: Save Run Information
-        # --------------------------------------------
-        run_info = {
-            "state": "completed",
-            "mode": mode,
-            "func_name": func.__name__,
-            "executed_file": script_name,
-            "save_dir": str(cfg.save_dir),
-            "start_time": start_time.strftime('%Y-%m-%d %H:%M:%S'),
-            "end_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "total_time_seconds": (datetime.datetime.now() - start_time).total_seconds(),
-            "result": str(result) if result is not None else None,
-            "retry_count": retry_count,
-            "error_files": error_files if error_files else None,
-            "command": command
-        }
-        with open(run_info_path, "w") as f:
-            json.dump(run_info, f, indent=4)
+            # 6. Publish rank-zero results only after all participating ranks return.
+            record.update(
+                state="failed" if failed else "completed",
+                retry_count=attempt,
+                end_time=datetime.now(UTC).isoformat(),
+                total_time_seconds=time.perf_counter() - started,
+                result=result,
+            )
+            record["error_files"].extend(path for path in failures if path is not None)
+            message = [None]
+            if group is None or rank == 0:
+                try:
+                    write_json(folder / "run_info.json", record)
+                except Exception:
+                    if group is None:
+                        raise
+                    message[0] = traceback.format_exc()
+            if group is not None:
+                group.broadcast_object_list(message, src=0)
+            if message[0] is not None:
+                raise RuntimeError(message[0])
+            if not failed:
+                if path := os.environ.get("HYDRA_VENV_RESULT"):
+                    write_json(Path(path), result)
+                return result
+            if attempt < retries:
+                logger.warning("Retrying %s in %s seconds", script.name, delay)
+                time.sleep(delay)
+            elif error is not None:
+                raise error
+            else:
+                raise RuntimeError(f"Another rank failed; see {record['error_files']}")
 
-        # Log finished message
-        logger.info("#" * 30 + " TASK FINISHED " + "#" * 30)
-        logger.info(f"[FINISHED] {func.__name__} completed successfully")
-        logger.info(f"Total time: {run_info['total_time_seconds']:.2f} seconds")
-        logger.info(f"Save directory: {save_dir}")
-        logger.info("#" * 75)
+    return wrapper
 
-        return result
 
-    return wrapper 
+def write_json(path: Path, value) -> None:
+    # 1. Replace complete records so interrupted writes do not look like finished runs.
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(value, indent=2, default=str, allow_nan=False), encoding="utf-8"
+    )
+    temporary.replace(path)
 
-################################################################################################
-# Custom OmegaConf resolvers
-################################################################################################
+
+def read_run_info(folder):
+    """Read the common record, accepting older example and TSFoundation records."""
+    folder = Path(folder)
+    for name in ("run_info.json", "run.json"):
+        path = folder / name
+        if path.exists():
+            record = json.loads(path.read_text(encoding="utf-8"))
+            record.setdefault(
+                "state", "completed" if record.get("status") == "success" else "incomplete"
+            )
+            return record
+    return {"state": "incomplete" if folder.exists() else "not run"}
+
+
+def rank_info(env=None):
+    """Read global rank/world; torchrun takes precedence inside a Slurm allocation."""
+    env = os.environ if env is None else env
+    if "RANK" in env:
+        return int(env["RANK"]), int(env.get("WORLD_SIZE", 1))
+    if "SLURM_PROCID" in env:
+        return int(env["SLURM_PROCID"]), int(env.get("SLURM_NTASKS", 1))
+    return 0, int(env.get("WORLD_SIZE", 1))
+
+
+def rank_zero(env=None):
+    group = sys.modules.get("torch.distributed") if env is None else None
+    if group is not None and group.is_available() and group.is_initialized():
+        return group.get_rank() == 0
+    return rank_info(env)[0] == 0
+
+
+def venv_force_check(cfg, script=None):
+    """Return (switched, result); legacy cfg.venv may name a parent containing .venv."""
+    # 1. uv normally selects the environment; switching is an opt-in compatibility path.
+    if not cfg.get("venv_force", False):
+        return False, None
+    root = Path(get_original_cwd() if HydraConfig.initialized() else Path.cwd()).resolve()
+    environment = (root / cfg.get("venv", ".")).resolve()
+    if not (environment / "pyvenv.cfg").is_file():
+        environment = environment / ".venv"
+    if Path(sys.prefix).resolve() == environment:
+        return False, None
+    target = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not target.is_file():
+        raise FileNotFoundError(f"venv_force: interpreter not found: {target}")
+    if os.environ.get("HYDRA_VENV_FORCED") == str(environment):
+        raise RuntimeError("venv_force: child did not enter the requested environment")
+    group = sys.modules.get("torch.distributed")
+    if group is not None and group.is_initialized():
+        raise RuntimeError("Select the environment before initializing distributed communication")
+
+    # 2. Pass the current resolved job, never the original multirun command line.
+    script = Path(script or sys.argv[0]).resolve()
+    staging = root / "data" / ".hydraqol"
+    staging.mkdir(parents=True, exist_ok=True)
+    child_env = dict(os.environ, HYDRA_VENV_FORCED=str(environment))
+    child_env["PYTHONPATH"] = os.pathsep.join(
+        [str(root), str(root / "src"), child_env.get("PYTHONPATH", "")]
+    )
+    with tempfile.TemporaryDirectory(dir=staging) as temporary:
+        OmegaConf.save(cfg, Path(temporary) / "config.yaml", resolve=True)
+        result_path = Path(temporary) / "result.json"
+        child_env["HYDRA_VENV_RESULT"] = str(result_path)
+        command = [
+            str(target),
+            str(script),
+            f"--config-path={Path(temporary).as_posix()}",
+            "--config-name=config",
+            "hydra.mode=RUN",
+        ]
+        logs = root / "data" / "outputs" / ".venv_logs" / Path(temporary).name
+        command.append(f"hydra.run.dir={logs.as_posix()}")
+        subprocess.run(command, cwd=root, env=child_env, check=True)
+        # 3. Transfer this invocation's result, including None when a job was skipped.
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    return True, result
+
+
+# Configuration resolvers
+
+
 def default(val, default=1):
-    # Here, you could add more logic to determine if val is "missing"
+    """Use a fallback for null values: ${default:${value},1}."""
     return default if val is None else val
-OmegaConf.register_new_resolver("default", default)
-
-def math(operator, *args):
-    """
-    Custom resolver for mathematical operations.
-    
-    Args:
-        operator (str): The mathematical operator to use ('+', '-', '*', '/', '**', etc.)
-        *args: The operands for the mathematical operation
-        
-    Returns:
-        The result of applying the operator to the operands
-    """
-    if not args:
-        raise ValueError("At least one operand is required for math operations")
-    
-    # Convert all arguments to float for consistent handling
-    operands = [float(arg) for arg in args]
-    
-    # Apply the operator
-    if operator == '+':
-        return sum(operands)
-    elif operator == '-':
-        result = operands[0]
-        for operand in operands[1:]:
-            result -= operand
-        return result
-    elif operator == '*':
-        result = 1
-        for operand in operands:
-            result *= operand
-        return result
-    elif operator == '/':
-        result = operands[0]
-        for operand in operands[1:]:
-            if operand == 0:
-                raise ValueError("Division by zero")
-            result /= operand
-        return result
-    elif operator == '**':
-        if len(operands) != 2:
-            raise ValueError("Power operation requires exactly 2 operands")
-        return operands[0] ** operands[1]
-    elif operator == '%':
-        if len(operands) != 2:
-            raise ValueError("Modulo operation requires exactly 2 operands")
-        if operands[1] == 0:
-            raise ValueError("Modulo by zero")
-        return operands[0] % operands[1]
-    elif operator == '//':
-        if len(operands) != 2:
-            raise ValueError("Floor division operation requires exactly 2 operands")
-        if operands[1] == 0:
-            raise ValueError("Division by zero")
-        return operands[0] // operands[1]
-    else:
-        raise ValueError(f"Unsupported operator: {operator}")
-
-OmegaConf.register_new_resolver("math", math)
 
 
+def math(operation: str, *values):
+    """Arithmetic on floats; power, modulo and floor division take two operands."""
+    values = list(map(float, values))
+    if not values or (operation in ("**", "%", "//") and len(values) != 2):
+        raise ValueError("math needs operands; **, % and // require exactly two")
+    operations = {
+        "+": operator.add,
+        "-": operator.sub,
+        "*": operator.mul,
+        "/": operator.truediv,
+        "//": operator.floordiv,
+        "%": operator.mod,
+        "**": operator.pow,
+        "min": min,
+        "max": max,
+    }
+    return reduce(operations[operation], values)
+
+
+def config_hash(*values):
+    """Stable short identity for explicit configuration fields, excluding runtime state."""
+    text = json.dumps(
+        [
+            OmegaConf.to_container(value, resolve=True) if OmegaConf.is_config(value) else value
+            for value in values
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+def concat(*lists):
+    """Join plain lists and OmegaConf lists without nesting them."""
+    lists = [
+        OmegaConf.to_container(value, resolve=True) if OmegaConf.is_config(value) else value
+        for value in lists
+    ]
+    return [item for values in lists for item in values]
+
+
+def cpu_count(fraction=1.0):
+    """Use available CPU affinity and the Slurm per-task allocation when present."""
+    available = (
+        len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    )
+    available = min(available, int(os.environ.get("SLURM_CPUS_PER_TASK", available)))
+    return max(1, int(available * float(fraction)))
+
+
+def get_mp_start_method():
+    """Expose the platform/Python default; choose spawn explicitly for CUDA workers."""
+    return multiprocessing.get_context().get_start_method()
+
+
+def _flatten(value):
+    if OmegaConf.is_config(value):
+        value = OmegaConf.to_container(value, resolve=True)
+    if not isinstance(value, (list, tuple)):
+        return [float(value)], None
+    flat, shape = [], []
+    for item in value:
+        values, child_shape = _flatten(item)
+        flat.extend(values)
+        shape.append((len(values), child_shape))
+    return flat, shape
+
+
+def _unflatten(values, shape, offset=0):
+    if shape is None:
+        return values[offset]
+    output = []
+    for size, child_shape in shape:
+        output.append(_unflatten(values, child_shape, offset))
+        offset += size
+    return output
+
+
+def grid_range(mins, maxs, n_steps):
+    """Cartesian grid retaining the nested shape; equal bounds yield one value."""
+    # 1. Construct each scalar range, retaining the structure for reconstruction.
+    low, shape = _flatten(mins)
+    high, high_shape = _flatten(maxs)
+    steps = int(n_steps)
+    if shape != high_shape or steps < 1:
+        raise ValueError("grid_range requires matching shapes and positive n_steps")
+    ranges = [
+        [a] if a == b or steps == 1 else [a + (b - a) * i / (steps - 1) for i in range(steps)]
+        for a, b in zip(low, high)
+    ]
+    # 2. Expand combinations and reconstruct each nested value.
+    return [_unflatten(values, shape) for values in itertools.product(*ranges)]
+
+
+def n_patches_overlap(length, patch, stride):
+    """Count patches after rounding the context down to a patch multiple."""
+    length, patch, stride = int(length), int(patch), int(stride)
+    return ((length // patch * patch - patch) // stride) + 1
+
+
+def n_patches_padded(length, patch, stride):
+    """Count patches after rounding the context up to a patch multiple."""
+    length, patch, stride = int(length), int(patch), int(stride)
+    return (((-(-length // patch)) * patch - patch) // stride) + 1
+
+
+def register_resolvers():
+    """Register once; importing another copy does not overwrite existing resolvers."""
+    resolvers = {
+        "default": default,
+        "default_if_missing": default,
+        "math": math,
+        "config_hash": config_hash,
+        "concat": concat,
+        "grid_range": grid_range,
+        "ceildiv": lambda a, b: -(-int(a) // int(b)),
+        "percentagestring": lambda value, width=3: f"{round(float(value) * 100):0{int(width)}d}",
+        "cpu_count": cpu_count,
+        "mp_start_method": get_mp_start_method,
+        "device_to_backend": lambda device: "gpu" if str(device).split(":")[0] == "cuda" else "cpu",
+        "n_patches_overlap": n_patches_overlap,
+        "n_patches_padded": n_patches_padded,
+    }
+    for name, resolver in resolvers.items():
+        if not OmegaConf.has_resolver(name):
+            OmegaConf.register_new_resolver(name, resolver)
+
+
+register_resolvers()

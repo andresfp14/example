@@ -1,6 +1,0 @@
-# Model configuration for SimpleNet
-name: net7 # name of the model configuration
-object:
-  _target_: modules.models.simple_net.Net
-  num_layers: 7
-  latent_dim: 128

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "thesis-example"
+version = "2.0.0"
+description = "A small scientific experiment pipeline"
+# Hydra 1.3 still fails with Python 3.14 argparse.
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "hydra-core==1.3.7",
+    "numpy>=2.5,<3",
+    "pandas>=3.0,<4",
+    "matplotlib>=3.11,<4",
+    "torch==2.14.0",
+    "torchvision==0.29.0",
+]
+
+[project.optional-dependencies]
+hpc = ["hydra-submitit-launcher==1.2.0"]
+parallel = ["hydra-joblib-launcher==1.2.0"]
+
+[dependency-groups]
+dev = ["ruff>=0.16.8,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["modules"]
+
+# Select the project's PyTorch build once; use /cu126 for NVIDIA CUDA 12.6.
+[tool.uv.sources]
+torch = { index = "pytorch", marker = "sys_platform != 'darwin'" }
+torchvision = { index = "pytorch", marker = "sys_platform != 'darwin'" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
